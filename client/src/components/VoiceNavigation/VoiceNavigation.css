@@ -1,0 +1,211 @@
+/* ==============================================================
+   VoiceNavigation.css
+   Accessibility-first: High Contrast, Huge Mic Button & Clear States
+   ============================================================== */
+
+.voice-nav-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+/* ── Giant Mic Button Wrapper ───────────────────────────────── */
+.voice-nav-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 260px;
+  height: 260px;
+  margin: 2rem auto;
+}
+
+/* Pulse Rings for Idle/Listening */
+.voice-nav-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+}
+.voice-nav-ring--1 { width: 100%; height: 100%; animation: pulse-ring 3s infinite linear; }
+.voice-nav-ring--2 { width: 100%; height: 100%; animation: pulse-ring 3s infinite linear 1s; }
+.voice-nav-ring--3 { width: 100%; height: 100%; animation: pulse-ring 3s infinite linear 2s; }
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.85); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* Giant Accessible Mic Button */
+.voice-nav-btn {
+  position: relative;
+  z-index: 10;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 10px solid var(--bg-secondary);
+  color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 12px 40px rgba(0, 212, 255, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+.voice-nav-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
+  box-shadow: 0 16px 50px rgba(0, 212, 255, 0.6);
+}
+.voice-nav-btn:active {
+  transform: scale(0.98);
+}
+.voice-nav-btn__icon {
+  font-size: 5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.voice-nav-btn__text {
+  font-size: 1.4rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Listening Animation ────────────────────────────────────── */
+.voice-nav-listening {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: #16a34a; /* Vivid listening green */
+  border: 10px solid #22c55e;
+  box-shadow: 0 0 60px rgba(34, 197, 94, 0.6);
+  color: #ffffff;
+  animation: listen-breathe 1.5s infinite alternate ease-in-out;
+}
+@keyframes listen-breathe {
+  0%   { transform: scale(1); box-shadow: 0 0 40px rgba(34, 197, 94, 0.5); }
+  100% { transform: scale(1.08); box-shadow: 0 0 80px rgba(34, 197, 94, 0.8); }
+}
+
+/* ── Processing Animation ───────────────────────────────────── */
+.voice-nav-processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: #0284c7; /* Vivid processing blue */
+  border: 10px solid #38bdf8;
+  color: #ffffff;
+  animation: process-rotate 2s infinite linear;
+}
+@keyframes process-rotate {
+  0%   { border-top-color: #ffffff; transform: rotate(0deg); }
+  100% { border-top-color: #ffffff; transform: rotate(360deg); }
+}
+
+/* ── Status Text Displays ───────────────────────────────────── */
+.voice-nav-status-label {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+.voice-nav-recognized {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--bg-card);
+  border: 3px solid var(--border);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  margin: 1rem 0;
+  width: 100%;
+}
+.voice-nav-detected {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #22c55e;
+  margin: 0.5rem 0 1.5rem;
+}
+
+/* ── Error & Action Banners ─────────────────────────────────── */
+.voice-nav-error {
+  width: 100%;
+  background: #271414;
+  border: 4px solid #ef4444;
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 2rem;
+}
+.voice-nav-error__title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #ef4444;
+  margin-bottom: 0.5rem;
+}
+.voice-nav-error__text {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fca5a5;
+  line-height: 1.5;
+}
+
+.voice-nav-actions {
+  display: flex;
+  gap: 1.25rem;
+  width: 100%;
+  margin-top: 1.5rem;
+}
+.voice-nav-action-btn {
+  flex: 1;
+  min-height: 72px;
+  padding: 1.2rem 2rem;
+  font-size: 1.35rem;
+  font-weight: 900;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  transition: all var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.voice-nav-btn-cancel {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 3px solid var(--border);
+}
+.voice-nav-btn-cancel:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.voice-nav-btn-retry {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: 3px solid var(--accent);
+  box-shadow: 0 0 25px rgba(0, 212, 255, 0.4);
+}
+.voice-nav-btn-retry:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 0 35px rgba(0, 212, 255, 0.6);
+}

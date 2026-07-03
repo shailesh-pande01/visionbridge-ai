@@ -1,0 +1,372 @@
+/* ==============================================================
+   LocationAssistant.css — "Where Am I?" Page
+   Flow: permission → locate → loading → result
+   ============================================================== */
+
+/* ── Page shell ─────────────────────────────────────────────── */
+.location-page {
+  min-height: 100vh;
+  padding-bottom: 4rem;
+}
+
+/* ── Back nav ───────────────────────────────────────────────── */
+.location-back {
+  padding: 1.25rem 0 0;
+}
+
+/* ── Page header ────────────────────────────────────────────── */
+.location-header {
+  text-align: center;
+  padding: 2.5rem 1.5rem 2.25rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  margin-top: 1.25rem;
+}
+.location-header__icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+.location-header__title {
+  font-size: clamp(1.9rem, 4.5vw, 2.6rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.65rem;
+  line-height: 1.15;
+}
+.location-header__desc {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  max-width: 500px;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+/* ── Body wrapper ───────────────────────────────────────────── */
+.location-body {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* ── Locate button ──────────────────────────────────────────── */
+.location-locate-btn {
+  width: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 1.2rem 1.5rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: inherit;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--bg-primary);
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.22);
+  transition: all var(--transition);
+}
+.location-locate-btn span:first-child { font-size: 1.5rem; line-height: 1; }
+
+.location-locate-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 0 36px rgba(0, 212, 255, 0.34);
+}
+.location-locate-btn:active { transform: translateY(0); }
+
+.location-locate-btn:disabled {
+  background: var(--bg-card);
+  border-color: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.location-locate-btn:disabled:hover {
+  transform: none;
+}
+
+/* ── Spinner ────────────────────────────────────────────────── */
+.location-spinner {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  border: 3.5px solid rgba(0, 212, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: location-spin 0.85s linear infinite;
+}
+.location-spinner--large {
+  width: 52px;
+  height: 52px;
+  border-width: 4px;
+}
+@keyframes location-spin { to { transform: rotate(360deg); } }
+
+/* ── Status card ────────────────────────────────────────────── */
+.location-status-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.75rem 2rem;
+}
+
+.location-status-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Idle state ─────────────────────────────────────────────── */
+.location-state {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.25rem 0;
+}
+.location-state__icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+.location-state__text {
+  font-size: 1rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Loading state ──────────────────────────────────────────── */
+.location-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+.location-loading__text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.location-loading__sub {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+/* ── Permission denied ──────────────────────────────────────── */
+.location-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 0;
+  text-align: center;
+}
+.location-denied__icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.location-denied__title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--emergency);
+}
+.location-denied__text {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 400px;
+}
+
+/* ── Error state ────────────────────────────────────────────── */
+.location-error-msg {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1.1rem;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #ff7070;
+}
+.location-error-msg span:first-child { font-size: 1.1rem; flex-shrink: 0; }
+.location-error-msg span:nth-child(2) { flex: 1; line-height: 1.5; }
+.location-error-dismiss {
+  background: none;
+  border: none;
+  color: #ff7070;
+  cursor: pointer;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.1rem 0.25rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--transition);
+}
+.location-error-dismiss:hover { opacity: 1; }
+
+/* ── Result layout ──────────────────────────────────────────── */
+.location-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.location-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.location-result-label {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.location-result-badge {
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  white-space: nowrap;
+}
+
+/* Summary text block */
+.location-result-summary-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.4rem 1.5rem;
+}
+.location-result-summary {
+  font-size: 1.08rem;
+  color: var(--text-primary);
+  line-height: 1.85;
+  white-space: pre-wrap;
+}
+
+/* Address block */
+.location-result-address {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+  padding: 0.6rem 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.location-result-address__icon { flex-shrink: 0; }
+.location-result-address__text { color: var(--text-primary); }
+
+/* Landmarks block */
+.location-result-landmarks {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.location-result-landmarks__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+.location-result-landmarks__list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.location-result-landmark-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  font-size: 0.94rem;
+  color: var(--text-primary);
+}
+.location-result-landmark-item span:first-child {
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* TTS status */
+.location-tts-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.location-tts-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: location-pulse 1.2s ease-in-out infinite;
+}
+@keyframes location-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+
+/* Result action buttons */
+.location-result-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-top: 0.25rem;
+}
+.location-result-action-btn {
+  flex: 1;
+  min-width: 130px;
+  justify-content: center;
+  font-size: 0.92rem;
+  padding: 0.75rem 1.1rem;
+}
+
+/* ── Coordinates pill ───────────────────────────────────────── */
+.location-coords {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+  padding-top: 0.5rem;
+}
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .location-body                { padding: 1.5rem 1rem 2rem; }
+  .location-status-card         { padding: 1.25rem 1.1rem; }
+  .location-result-action-btn   { flex: 1 1 100%; }
+  .location-locate-btn          { font-size: 1rem; min-height: 68px; }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .location-spinner          { animation: none; border-top-color: var(--accent); }
+  .location-tts-status__dot  { animation: none; opacity: 1; }
+}

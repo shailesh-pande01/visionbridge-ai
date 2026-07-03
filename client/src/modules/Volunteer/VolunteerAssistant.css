@@ -1,0 +1,448 @@
+/* ==============================================================
+   VolunteerAssistant.css
+   Accessible, High Contrast, Large Text & Buttons
+   ============================================================== */
+
+.volunteer-page {
+  min-height: 100vh;
+  padding-bottom: 5rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.volunteer-back {
+  padding: 1.25rem 0 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.volunteer-header {
+  text-align: center;
+  padding: 2.5rem 1.5rem 2.25rem;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border);
+  margin-top: 1.25rem;
+}
+.volunteer-header__icon {
+  font-size: 3.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+.volunteer-header__title {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  font-weight: 900;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  line-height: 1.15;
+}
+.volunteer-header__desc {
+  font-size: 1.2rem;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+/* ── Mode Selection Tab / Toggle ────────────────────────────── */
+.volunteer-mode-toggle {
+  display: flex;
+  max-width: 700px;
+  margin: 2rem auto 1.5rem;
+  background: var(--bg-secondary);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.volunteer-mode-btn {
+  flex: 1;
+  padding: 1.4rem 1rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+.volunteer-mode-btn--active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: 900;
+}
+.volunteer-mode-btn:not(.volunteer-mode-btn--active):hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* ── Container Shell ────────────────────────────────────────── */
+.volunteer-container {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+/* ── Card Shells ────────────────────────────────────────────── */
+.volunteer-card {
+  background: var(--bg-card);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+.volunteer-card--highlight {
+  border-color: var(--accent);
+}
+
+.volunteer-card-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ── High Contrast Inputs (Accessible for Low Vision) ───────── */
+.volunteer-form-group {
+  margin-bottom: 1.75rem;
+}
+.volunteer-form-group:last-child {
+  margin-bottom: 0;
+}
+.volunteer-label {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.65rem;
+}
+.volunteer-input,
+.volunteer-textarea {
+  width: 100%;
+  padding: 1.1rem 1.3rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  background: var(--bg-primary);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  transition: border-color var(--transition);
+}
+.volunteer-input:focus,
+.volunteer-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+.volunteer-textarea {
+  min-height: 140px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* ── Preset Pills / Examples ────────────────────────────────── */
+.volunteer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.volunteer-preset-btn {
+  padding: 0.6rem 1.1rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  border-radius: 99px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.volunteer-preset-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+/* ── Giant Submit / Action Buttons ──────────────────────────── */
+.volunteer-btn-giant {
+  width: 100%;
+  min-height: 84px;
+  padding: 1.4rem 2rem;
+  font-size: 1.4rem;
+  font-weight: 900;
+  border-radius: var(--radius);
+  border: 3px solid var(--accent);
+  background: var(--accent);
+  color: var(--bg-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+  transition: all var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.volunteer-btn-giant:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 0 42px rgba(0, 212, 255, 0.45);
+}
+.volunteer-btn-giant:active { transform: translateY(0); }
+.volunteer-btn-giant:disabled {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.volunteer-btn-success {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--bg-primary);
+  box-shadow: 0 0 30px rgba(34, 197, 94, 0.3);
+}
+.volunteer-btn-success:hover {
+  background: #16a34a;
+  box-shadow: 0 0 42px rgba(34, 197, 94, 0.45);
+}
+
+.volunteer-btn-danger {
+  background: var(--emergency);
+  border-color: var(--emergency);
+  color: var(--bg-primary);
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+}
+.volunteer-btn-danger:hover {
+  background: #dc2626;
+  box-shadow: 0 0 42px rgba(239, 68, 68, 0.45);
+}
+
+.volunteer-btn-secondary {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+.volunteer-btn-secondary:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+/* ── Waiting & Status Banners ───────────────────────────────── */
+.volunteer-status-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--bg-card);
+  border: 3px solid var(--accent);
+  border-radius: var(--radius);
+  gap: 1.25rem;
+}
+.volunteer-status-banner__icon {
+  font-size: 4rem;
+  line-height: 1;
+}
+.volunteer-status-banner__title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+.volunteer-status-banner__desc {
+  font-size: 1.25rem;
+  color: var(--text-muted);
+  max-width: 500px;
+  line-height: 1.6;
+}
+
+/* ── Live Map Container ─────────────────────────────────────── */
+.volunteer-map-container {
+  width: 100%;
+  height: 350px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-secondary);
+  position: relative;
+}
+.volunteer-map-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+.volunteer-map-radar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 4px solid var(--accent);
+  border-top-color: transparent;
+  animation: location-spin 1.5s linear infinite;
+  margin-bottom: 1rem;
+}
+
+/* ── Chat UI ────────────────────────────────────────────────── */
+.volunteer-chat {
+  display: flex;
+  flex-direction: column;
+  height: 400px;
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.volunteer-chat-header {
+  padding: 1rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border);
+  font-size: 1.2rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.volunteer-chat-messages {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.volunteer-message {
+  max-width: 80%;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.volunteer-message--self {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-bottom-right-radius: 2px;
+}
+.volunteer-message--other {
+  align-self: flex-start;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 2px solid var(--border);
+  border-bottom-left-radius: 2px;
+}
+.volunteer-chat-input-area {
+  display: flex;
+  border-top: 2px solid var(--border);
+  background: var(--bg-primary);
+}
+.volunteer-chat-input {
+  flex: 1;
+  padding: 1.1rem 1.5rem;
+  border: none;
+  background: transparent;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.volunteer-chat-input:focus {
+  outline: none;
+}
+.volunteer-chat-send-btn {
+  padding: 0 1.75rem;
+  background: var(--accent);
+  border: none;
+  color: var(--bg-primary);
+  font-size: 1.25rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.volunteer-chat-send-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Request List (Volunteer Dashboard) ─────────────────────── */
+.volunteer-request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.volunteer-request-item {
+  background: var(--bg-card);
+  border: 3px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: border-color var(--transition);
+}
+.volunteer-request-item:hover {
+  border-color: var(--accent);
+}
+.volunteer-request-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0.75rem;
+}
+.volunteer-request-item__requester {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.volunteer-request-item__time {
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+.volunteer-request-item__desc {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.5;
+  background: var(--bg-secondary);
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  border-left: 5px solid var(--accent);
+}
+.volunteer-request-item__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+}
+.volunteer-request-item__actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+.volunteer-request-item__actions button {
+  flex: 1;
+  min-height: 64px;
+  font-size: 1.2rem;
+}

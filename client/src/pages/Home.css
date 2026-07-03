@@ -1,0 +1,241 @@
+/* ============================================================
+   Home Page — Voice-First Layout
+   Central voice button + large tap-friendly command tiles
+   ============================================================ */
+
+/* ── Page Header (compact) ──────────────────────────────── */
+.home-header {
+  background: var(--bg-secondary);
+  text-align: center;
+  padding: 3rem 0 2.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.home-header__inner {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.home-header__title {
+  font-size: clamp(1.9rem, 4.5vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+.home-header__sub {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ── Voice Section ──────────────────────────────────────── */
+.voice-section {
+  padding: 4.5rem 0 4rem;
+  text-align: center;
+}
+.voice-section__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+.voice-section__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--accent);
+}
+
+/* ── Voice Button + Rings ───────────────────────────────── */
+.voice-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Concentric pulse rings */
+.voice-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: ring-pulse 3s ease-out infinite;
+  pointer-events: none;
+}
+.voice-ring--1 { animation-delay: 0s;   }
+.voice-ring--2 { animation-delay: 1s;   }
+.voice-ring--3 { animation-delay: 2s;   }
+
+@keyframes ring-pulse {
+  0%   { transform: scale(0.7);  opacity: 0.7; }
+  80%  { transform: scale(1.55); opacity: 0;   }
+  100% { transform: scale(1.55); opacity: 0;   }
+}
+
+/* The button itself */
+.voice-btn {
+  position: relative;
+  z-index: 1;
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  box-shadow:
+    0 0 0 6px rgba(0, 212, 255, 0.12),
+    0 0 50px rgba(0, 212, 255, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.voice-btn:hover {
+  transform: scale(1.07);
+  background: var(--accent-hover);
+  box-shadow:
+    0 0 0 10px rgba(0, 212, 255, 0.14),
+    0 0 70px rgba(0, 212, 255, 0.4);
+}
+.voice-btn:active {
+  transform: scale(0.96);
+}
+.voice-btn__icon {
+  font-size: 3.4rem;
+  line-height: 1;
+  display: block;
+}
+.voice-btn__text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--bg-primary);
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* Example phrases below button */
+.voice-examples {
+  font-size: 1rem;
+  color: var(--text-muted);
+  max-width: 420px;
+  line-height: 1.6;
+}
+.voice-examples em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* ── Command Tiles ──────────────────────────────────────── */
+.commands-section {
+  padding: 3.5rem 0 5rem;
+}
+
+.commands-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+/* SOS tile spans both columns */
+.cmd-tile--sos {
+  grid-column: 1 / -1;
+}
+
+/* Base tile */
+.cmd-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.6rem 1.75rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  width: 100%;
+  min-height: 130px;
+  transition: border-color var(--transition), transform var(--transition), background var(--transition);
+}
+.cmd-tile:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  transform: translateY(-2px);
+}
+.cmd-tile:active {
+  transform: translateY(0);
+}
+.cmd-tile:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.cmd-tile__icon {
+  font-size: 2.4rem;
+  margin-bottom: 0.2rem;
+  display: block;
+  line-height: 1;
+}
+.cmd-tile__label {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  display: block;
+}
+.cmd-tile__hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: block;
+  margin-top: 0.1rem;
+}
+
+/* ── SOS Variant ──────────────────────────────────────── */
+.cmd-tile--sos {
+  background: rgba(255, 68, 68, 0.07);
+  border-color: rgba(255, 68, 68, 0.35);
+  flex-direction: row;
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 100px;
+  padding: 1.5rem 2rem;
+}
+.cmd-tile--sos:hover {
+  background: rgba(255, 68, 68, 0.13);
+  border-color: var(--emergency);
+  transform: translateY(-2px);
+}
+.cmd-tile--sos .cmd-tile__icon  { font-size: 2.8rem; margin-bottom: 0; }
+.cmd-tile--sos .cmd-tile__label { font-size: 1.35rem; color: var(--emergency); }
+.cmd-tile--sos .cmd-tile__hint  { color: rgba(255, 68, 68, 0.6); }
+
+/* ── Browse link ──────────────────────────────────────── */
+.commands-more {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+/* ── Responsive ───────────────────────────────────────── */
+@media (max-width: 600px) {
+  .voice-wrap  { width: 190px; height: 190px; }
+  .voice-btn   { width: 124px; height: 124px; }
+  .voice-btn__icon { font-size: 2.8rem; }
+
+  .commands-grid { grid-template-columns: 1fr; }
+  .cmd-tile--sos { grid-column: 1; flex-direction: column; align-items: flex-start; }
+  .cmd-tile { min-height: auto; }
+}
+
+/* ── Reduced Motion ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .voice-ring { animation: none; opacity: 0; }
+}

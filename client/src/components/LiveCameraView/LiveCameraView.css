@@ -1,0 +1,183 @@
+/* ==============================================================
+   LiveCameraView.css
+   High Contrast, Accessible Live Camera Preview & Giant Capture Button
+   ============================================================== */
+
+.live-camera-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 2rem;
+  background: var(--bg-card);
+  border: 4px solid var(--border);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+/* ── Camera Preview Box ─────────────────────────────────────── */
+.live-camera-viewbox {
+  position: relative;
+  width: 100%;
+  background: #000000;
+  min-height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.live-camera-video {
+  width: 100%;
+  height: 100%;
+  max-height: 480px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Status overlays inside preview */
+.live-camera-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  padding: 2rem;
+  text-align: center;
+}
+
+.live-camera-status-text {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-top: 1rem;
+}
+
+.live-camera-error-box {
+  background: #271414;
+  border: 3px solid #ef4444;
+  padding: 1.5rem;
+  border-radius: 16px;
+  max-width: 90%;
+}
+.live-camera-error-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #ef4444;
+  margin-bottom: 0.5rem;
+}
+.live-camera-error-desc {
+  font-size: 1.25rem;
+  color: #fca5a5;
+  margin-bottom: 1.25rem;
+  line-height: 1.4;
+}
+
+/* ── Toolbar & Capture Actions ──────────────────────────────── */
+.live-camera-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 2rem 1.5rem;
+  background: var(--bg-secondary);
+  border-top: 3px solid var(--border);
+}
+
+.live-camera-primary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+/* Switch Camera Button (Left side) */
+.live-camera-switch-btn {
+  position: absolute;
+  left: 0;
+  background: var(--bg-card);
+  border: 3px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.85rem 1.25rem;
+  border-radius: 14px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+.live-camera-switch-btn:hover {
+  background: var(--border);
+  transform: scale(1.05);
+}
+
+/* Giant Circular Capture Button */
+.live-camera-capture-btn {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 8px solid #ffffff;
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease-in-out;
+  outline: none;
+}
+.live-camera-capture-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.08);
+  box-shadow: 0 0 45px rgba(0, 212, 255, 0.8);
+}
+.live-camera-capture-btn:active {
+  transform: scale(0.95);
+}
+.live-camera-capture-btn__icon {
+  font-size: 2.8rem;
+  line-height: 1;
+}
+
+/* Secondary Option: Upload from Device */
+.live-camera-secondary-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-top: 2px dashed var(--border);
+  padding-top: 1.5rem;
+}
+
+.live-camera-upload-label {
+  background: transparent;
+  border: 3px solid var(--accent);
+  color: var(--accent);
+  padding: 0.9rem 1.75rem;
+  border-radius: 14px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.2s;
+}
+.live-camera-upload-label:hover {
+  background: var(--accent);
+  color: var(--bg-primary);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.live-camera-file-input {
+  display: none;
+}

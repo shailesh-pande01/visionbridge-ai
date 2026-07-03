@@ -1,0 +1,369 @@
+/* ==============================================================
+   SOSAssistant.css
+   Accessibility-first: High Contrast, Giant SOS Button, Large Text
+   ============================================================== */
+
+.sos-page {
+  min-height: 100vh;
+  padding-bottom: 5rem;
+  background: #0d1117; /* Deep high contrast dark background */
+  color: #ffffff;
+}
+
+.sos-back {
+  padding: 1.25rem 0 0;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.sos-header {
+  text-align: center;
+  padding: 2.5rem 1.5rem 2.25rem;
+  background: #161b22;
+  border-bottom: 3px solid #b91c1c; /* Vivid emergency red border */
+  margin-top: 1.25rem;
+}
+.sos-header__icon {
+  font-size: 4rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  line-height: 1;
+}
+.sos-header__title {
+  font-size: clamp(2.2rem, 6vw, 3.2rem);
+  font-weight: 900;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+}
+.sos-header__desc {
+  font-size: 1.3rem;
+  color: #94a3b8;
+  max-width: 650px;
+  margin: 0 auto;
+  line-height: 1.65;
+  font-weight: 600;
+}
+
+/* ── Mode Selection Tab / Toggle ────────────────────────────── */
+.sos-mode-toggle {
+  display: flex;
+  max-width: 700px;
+  margin: 2rem auto 2rem;
+  background: #161b22;
+  border: 4px solid #30363d;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.sos-mode-btn {
+  flex: 1;
+  padding: 1.5rem 1rem;
+  font-size: 1.35rem;
+  font-weight: 800;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all var(--transition);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.sos-mode-btn--active {
+  background: #b91c1c; /* Vivid red active tab */
+  color: #ffffff;
+  font-weight: 900;
+}
+.sos-mode-btn:not(.sos-mode-btn--active):hover {
+  background: #21262d;
+  color: #ffffff;
+}
+
+/* ── Container Shell ────────────────────────────────────────── */
+.sos-container {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ── Card Shells ────────────────────────────────────────────── */
+.sos-card {
+  background: #161b22;
+  border: 4px solid #30363d;
+  border-radius: 20px;
+  padding: 2.5rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.sos-card--emergency {
+  border-color: #dc2626;
+  background: #1a1010;
+}
+
+.sos-card-title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  color: #ffffff;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 3px solid #30363d;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+/* ── Giant SOS Trigger Button ───────────────────────────────── */
+.sos-giant-button-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.sos-button-giant {
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 12px solid #7f1d1d;
+  color: #ffffff;
+  font-size: 4.5rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 0 60px rgba(220, 38, 38, 0.6);
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.sos-button-giant:hover {
+  background: #ef4444;
+  transform: scale(1.05);
+  box-shadow: 0 0 80px rgba(239, 68, 68, 0.8);
+}
+.sos-button-giant:active {
+  transform: scale(0.98);
+  background: #b91c1c;
+}
+.sos-button-giant span:last-child {
+  font-size: 1.4rem;
+  font-weight: 700;
+  opacity: 0.9;
+  margin-top: 0.5rem;
+  letter-spacing: 0;
+}
+
+/* ── Voice Command Indicator ────────────────────────────────── */
+.sos-voice-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1.2rem 2rem;
+  background: #21262d;
+  border: 3px solid #30363d;
+  border-radius: 99px;
+  margin-top: 2.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #38bdf8;
+}
+.sos-voice-indicator__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: sos-pulse 1.2s infinite;
+}
+@keyframes sos-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50%      { opacity: 1; transform: scale(1.2); }
+}
+
+/* ── Countdown Screen ───────────────────────────────────────── */
+.sos-countdown-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #271414;
+  border: 6px solid #ef4444;
+  border-radius: 24px;
+  gap: 2rem;
+}
+.sos-countdown-number {
+  font-size: 8rem;
+  font-weight: 900;
+  color: #ef4444;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
+}
+.sos-countdown-title {
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+.sos-countdown-sub {
+  font-size: 1.35rem;
+  color: #94a3b8;
+  max-width: 480px;
+}
+
+/* ── Action Buttons ─────────────────────────────────────────── */
+.sos-btn-block {
+  width: 100%;
+  min-height: 84px;
+  padding: 1.5rem 2rem;
+  font-size: 1.5rem;
+  font-weight: 900;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  transition: all var(--transition);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.sos-btn-cancel {
+  background: #30363d;
+  color: #ffffff;
+  border: 4px solid #8c9ba5;
+}
+.sos-btn-cancel:hover {
+  background: #444c56;
+  border-color: #ffffff;
+}
+.sos-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: 4px solid #fca5a5;
+  box-shadow: 0 0 30px rgba(220, 38, 38, 0.4);
+}
+.sos-btn-danger:hover {
+  background: #ef4444;
+  box-shadow: 0 0 45px rgba(239, 68, 68, 0.6);
+}
+.sos-btn-success {
+  background: #16a34a;
+  color: #ffffff;
+  border: 4px solid #86efac;
+  box-shadow: 0 0 30px rgba(22, 163, 74, 0.4);
+}
+.sos-btn-success:hover {
+  background: #22c55e;
+}
+
+/* ── High Contrast Form Inputs (Contacts Page) ──────────────── */
+.sos-form-group {
+  margin-bottom: 2rem;
+}
+.sos-form-group:last-child {
+  margin-bottom: 0;
+}
+.sos-label {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 0.75rem;
+}
+.sos-input {
+  width: 100%;
+  padding: 1.25rem 1.5rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  background: #0d1117;
+  border: 4px solid #30363d;
+  border-radius: 16px;
+  color: #ffffff;
+  transition: border-color var(--transition);
+}
+.sos-input:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 15px rgba(220, 38, 38, 0.5);
+}
+
+/* ── Contact List Items ─────────────────────────────────────── */
+.sos-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+.sos-contact-item {
+  background: #161b22;
+  border: 4px solid #30363d;
+  border-radius: 18px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.sos-contact-item__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 3px solid #30363d;
+  padding-bottom: 1rem;
+}
+.sos-contact-item__name {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+.sos-contact-item__rel {
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: #21262d;
+  border: 2px solid #444c56;
+  padding: 0.4rem 1rem;
+  border-radius: 99px;
+  color: #38bdf8;
+}
+.sos-contact-item__phone {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.sos-contact-item__actions {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+.sos-contact-item__actions button {
+  flex: 1;
+  min-height: 68px;
+  font-size: 1.25rem;
+  font-weight: 800;
+  border-radius: 12px;
+  border: 3px solid #444c56;
+  background: #21262d;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.sos-contact-item__actions button:hover {
+  background: #30363d;
+  border-color: #ffffff;
+}
+.sos-contact-item__actions button.btn-del:hover {
+  background: #dc2626;
+  border-color: #fca5a5;
+}
