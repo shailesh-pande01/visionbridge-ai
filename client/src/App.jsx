@@ -15,6 +15,8 @@ import ReadingAssistant from './modules/Reading';
 import LocationAssistant from './modules/Location';
 import VolunteerModule from './modules/Volunteer';
 import SOSModule from './modules/SOS';
+import TransportAssistant from './modules/Transport';
+import FinderAssistant from './modules/Finder';
 
 import './App.css';
 
@@ -42,6 +44,8 @@ function App() {
             <Route path="/location"  element={<LocationAssistant />} />
             <Route path="/volunteer" element={<VolunteerModule />} />
             <Route path="/sos"       element={<SOSModule />} />
+            <Route path="/transport" element={<TransportAssistant />} />
+            <Route path="/finder"    element={<FinderAssistant />} />
 
             {/* Alias routes for Voice Command Navigation */}
             <Route path="/camera-assistant"  element={<Navigate to="/camera" replace />} />
@@ -49,6 +53,9 @@ function App() {
             <Route path="/location-assistant" element={<Navigate to="/location" replace />} />
             <Route path="/volunteer-help"    element={<Navigate to="/volunteer" replace />} />
             <Route path="/emergency-sos"     element={<Navigate to="/sos" replace />} />
+            <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
+            <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
+            <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
           </Routes>
         </main>
 

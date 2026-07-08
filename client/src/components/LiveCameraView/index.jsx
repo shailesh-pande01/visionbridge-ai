@@ -10,7 +10,7 @@ function speak(text) {
   }
 }
 
-function LiveCameraView({ onCapture, onSelectFile, buttonLabel = 'Capture', secondaryLabel = 'Upload from Device' }) {
+function LiveCameraView({ onCapture, onSelectFile, onContinuousCapture, autoCaptureInterval, buttonLabel = 'Capture', secondaryLabel = 'Upload from Device' }) {
   const [facingMode, setFacingMode] = useState('environment');
   // 'initializing' | 'ready' | 'error'
   const [cameraStatus, setCameraStatus] = useState('initializing');
@@ -78,6 +78,39 @@ function LiveCameraView({ onCapture, onSelectFile, buttonLabel = 'Capture', seco
       stopStream();
     };
   }, [startCamera, stopStream]);
+
+  // ── Continuous Auto-Capture Interval ───────────────────────────
+  const latestCallback = useRef(onContinuousCapture);
+  useEffect(() => {
+    latestCallback.current = onContinuousCapture;
+  }, [onContinuousCapture]);
+
+  useEffect(() => {
+    if (!autoCaptureInterval || cameraStatus !== 'ready') return;
+
+    const intervalId = setInterval(() => {
+      if (!videoRef.current) return;
+
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1024;
+      canvas.height = video.videoHeight || 768;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      const base64 = dataUrl.split(',')[1];
+      const sizeKB = Math.round((base64.length * 3) / 4 / 1024);
+
+      // Silent background capture, do not stop stream
+      if (latestCallback.current) {
+        latestCallback.current(base64, sizeKB, dataUrl);
+      }
+    }, autoCaptureInterval);
+
+    return () => clearInterval(intervalId);
+  }, [autoCaptureInterval, cameraStatus]);
 
   // ── Toggle Front / Rear Camera ─────────────────────────────────
   const handleSwitchCamera = () => {

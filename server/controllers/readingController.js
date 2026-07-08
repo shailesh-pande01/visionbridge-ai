@@ -56,22 +56,22 @@ const GENERATION_CONFIG = {
 //   · Preserve layout / line breaks where meaningful
 //   · Read aloud friendly — natural paragraph flow
 //   · No guessing — omit anything unreadable
-const READING_PROMPT = `You are a text-reading assistant for a person with low vision. Your ONLY job is to extract and return the text visible in the image.
+const READING_PROMPT = `You are a text-reading assistant for a person with low vision. Your ONLY job is to extract the text visible in the image and evaluate your confidence.
 
 Rules you MUST follow:
-1. Return ONLY the text you can clearly read in the image — nothing else.
-2. Do NOT add commentary, descriptions, explanations, or greetings.
-3. Do NOT describe the image, objects, colors, or layout.
-4. Do NOT say things like "The text reads:" or "Here is the text:" — just output the text directly.
-5. Preserve the natural reading order (top to bottom, left to right).
-6. Separate distinct blocks of text (e.g. a heading vs body text) with a blank line.
-7. If text appears in columns, read each column top-to-bottom, left column first.
-8. If a word is partially obscured but you can confidently infer it, include it. If not, skip it.
-9. Include ALL text: headings, body text, prices, dates, fine print, ingredients, warnings, phone numbers, URLs.
-10. For medicine labels, include dosage, warnings, expiry dates, and ingredients — these are critical.
-11. If no text is visible at all, respond with exactly: NO_TEXT_FOUND
-
-The extracted text will be read aloud to the user via text-to-speech, so ensure it flows naturally when spoken.`;
+1. Return ONLY a valid JSON object. No markdown, no code fences, no extra text.
+2. The JSON MUST follow this exact structure:
+{
+  "answer": "The extracted text goes here...",
+  "confidence": <decimal 0.0 to 1.0, estimate based on text readability, clarity, and occlusion>
+}
+3. Preserve the natural reading order (top to bottom, left to right).
+4. If a word is partially obscured but you can confidently infer it, include it. If not, skip it.
+5. If no text is visible at all, or it is completely unreadable, return:
+{
+  "answer": "NO_TEXT_FOUND",
+  "confidence": 0.0
+}`;
 
 // ── generateWithFallback ──────────────────────────────────────────
 async function generateWithFallback(client, parts) {
@@ -131,22 +131,40 @@ function safeExtractText(geminiResult) {
 }
 
 // ── Response cleaner ──────────────────────────────────────────────
-// Strip markdown fences, thinking tokens, and other artifacts
-function cleanExtractedText(rawText) {
+// ── Response parser ──────────────────────────────────────────────
+function parseGeminiResponse(rawText) {
   let cleaned = rawText.trim();
-
-  // Strip markdown code fences if present
-  const fenceMatch = cleaned.match(/```(?:\w*)\s*([\s\S]*?)```/);
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch) {
     cleaned = fenceMatch[1].trim();
   }
-
-  // Handle the "no text" sentinel
-  if (cleaned === 'NO_TEXT_FOUND' || cleaned.length === 0) {
-    return null;
+  if (!cleaned.startsWith('{')) {
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd   = cleaned.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+    }
   }
 
-  return cleaned;
+  try {
+    const parsed = JSON.parse(cleaned);
+    let answer = String(parsed.answer || '').trim();
+    if (answer === 'NO_TEXT_FOUND' || answer.length === 0) {
+      answer = null;
+    }
+    return {
+      extractedText: answer,
+      confidence: Math.min(1.0, Math.max(0.0, Number(parsed.confidence ?? 0.8))),
+    };
+  } catch {
+    console.warn('[Reading] JSON parse failed, treating raw text as answer');
+    let answer = rawText.trim();
+    if (answer === 'NO_TEXT_FOUND' || answer.length === 0) answer = null;
+    return {
+      extractedText: answer,
+      confidence: 0.75, // fallback confidence
+    };
+  }
 }
 
 // ── Gemini error classifier ───────────────────────────────────────
@@ -220,13 +238,15 @@ exports.extractText = async (req, res, next) => {
 
     console.log(`[Reading] Gemini responded — ${rawText.length} chars`);
 
-    const extractedText = cleanExtractedText(rawText);
+    const parsed = parseGeminiResponse(rawText);
+    const extractedText = parsed.extractedText;
 
     if (!extractedText) {
       return res.status(200).json({
         success: true,
         data: {
           extractedText: null,
+          confidence: parsed.confidence,
           message: 'No readable text was found in this image. Try pointing the camera at text such as a sign, label, menu, or document.',
         },
       });
@@ -234,7 +254,7 @@ exports.extractText = async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      data: { extractedText },
+      data: { extractedText, confidence: parsed.confidence },
     });
 
   } catch (err) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { extractText } from '../../services/readingService';
 import LiveCameraView from '../../components/LiveCameraView';
 import './ReadingAssistant.css';
@@ -213,6 +213,8 @@ function ReadingAssistant() {
   const [imageUrl, setImageUrl] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const CONFIDENCE_THRESHOLD = 0.70;
 
   // ── Execute Extraction API Call ────────────────────────────────
   const executeExtraction = async (base64Payload) => {
@@ -222,6 +224,13 @@ function ReadingAssistant() {
 
     try {
       const data = await extractText(base64Payload, 'image/jpeg');
+
+      if (data.confidence !== undefined && data.confidence < CONFIDENCE_THRESHOLD) {
+        setStatus('low-confidence');
+        speak("I'm not confident enough to read this accurately. Would you like to connect with a volunteer?");
+        return;
+      }
+
       setResult(data);
       setStatus('result');
     } catch (err) {
@@ -338,6 +347,36 @@ function ReadingAssistant() {
               />
             )}
             <ResultResponse result={result} onReset={handleReset} />
+          </div>
+        )}
+
+        {/* STEP 4: LOW CONFIDENCE HANDOFF */}
+        {status === 'low-confidence' && (
+          <div style={{ background: 'var(--bg-card)', border: '4px solid var(--border)', borderRadius: '24px', padding: '3rem 2rem', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+            <span aria-hidden="true" style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>🤔</span>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
+            <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
+              I'm not confident enough to read this text accurately.<br/><br/>
+              Would you like to connect with a volunteer for human assistance?
+            </p>
+            <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => navigate('/volunteer', { state: { source: 'Smart Reading Assistant' } })}
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', minHeight: '64px', fontSize: '1.35rem', fontWeight: 900 }}
+              >
+                ✅ Yes, Connect to Volunteer
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={handleReset}
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '2px solid var(--border)', minHeight: '64px', fontSize: '1.35rem', fontWeight: 900 }}
+              >
+                ❌ No, Try Camera Again
+              </button>
+            </div>
           </div>
         )}
       </div>

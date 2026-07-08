@@ -82,3 +82,45 @@ export async function analyzeImage(imageBase64, mimeType) {
 
   return body.data;
 }
+
+/**
+ * analyzeHazard
+ * POSTs a base64 image and scene memory to /api/vision/hazard for continuous scanning.
+ *
+ * @param   {string} imageBase64 - raw base64
+ * @param   {string} mimeType    - e.g. "image/jpeg"
+ * @param   {string} sceneMemory - short summary of previous state
+ * @returns {Promise<object>}    - { speech, sceneSummary, timestamp }
+ */
+export async function analyzeHazard(imageBase64, mimeType, sceneMemory) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}/api/vision/hazard`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ imageBase64, mimeType, sceneMemory }),
+    });
+  } catch {
+    throw new Error('Cannot reach the server.');
+  }
+
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error('Server returned an unreadable response.');
+  }
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error('RATE_LIMIT');
+    }
+    throw new Error(body?.error || 'Hazard analysis failed.');
+  }
+
+  if (!body.success) {
+    throw new Error(body?.error || 'Hazard analysis failed.');
+  }
+
+  return body.data;
+}

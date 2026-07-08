@@ -16,7 +16,7 @@ const ACCEPTED_MIME_TYPES = [
 const MAX_BASE64_LENGTH = 14_000_000;
 
 function validateVisionRequest(req, res, next) {
-  const { imageBase64, mimeType } = req.body;
+  const { imageBase64, mimeType, sceneMemory, objectName } = req.body;
 
   // ── 1 · imageBase64 presence ──────────────────────────────────
   if (!imageBase64) {
@@ -62,6 +62,8 @@ function validateVisionRequest(req, res, next) {
   req.visionData = {
     imageBase64: imageBase64.trim(),
     mimeType,
+    sceneMemory: sceneMemory || '',
+    objectName: objectName || '',
   };
 
   next();

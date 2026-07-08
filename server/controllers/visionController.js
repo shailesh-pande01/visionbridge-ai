@@ -105,7 +105,7 @@ Analyze the image and return ONLY a valid JSON object. No markdown, no code fenc
 
 {
   "scene": "4 to 6 word label for the location (e.g. 'Indoor supermarket aisle', 'Outdoor pedestrian crossing')",
-  "confidence": <integer 0-100>,
+  "confidence": <decimal 0.0 to 1.0, estimate based on image clarity, visibility, lighting, and occlusion>,
   "description": "2 to 3 sentences spoken directly to the user. Start with what is immediately ahead. Use 'on your left', 'on your right', 'directly ahead', 'close to you', 'further away'. If the path ahead is clear, say so. If anything blocks the way, say it first. Read any visible text on signs, screens, or labels word for word.",
   "objects": [
     "Object — direction and estimated distance (e.g. 'Dining table — directly ahead, approximately 2 steps away')",
@@ -178,7 +178,7 @@ function parseGeminiResponse(rawText) {
     const parsed = JSON.parse(cleaned);
     return {
       scene:       String(parsed.scene       || 'Scene detected'),
-      confidence:  Math.min(100, Math.max(0, Math.round(Number(parsed.confidence ?? 80)))),
+      confidence:  Math.min(1.0, Math.max(0.0, Number(parsed.confidence ?? 0.8))),
       description: String(parsed.description || rawText),
       objects:     Array.isArray(parsed.objects)   ? parsed.objects.map(String)   : [],
       obstacles:   Array.isArray(parsed.obstacles) ? parsed.obstacles.map(String) : [],
@@ -189,7 +189,7 @@ function parseGeminiResponse(rawText) {
     console.warn('[Vision] JSON parse failed — wrapping as plain text description');
     return {
       scene:       'Scene detected',
-      confidence:  75,
+      confidence:  0.75,
       description: rawText,
       objects:     [],
       obstacles:   [],
@@ -202,7 +202,7 @@ function parseGeminiResponse(rawText) {
 // ── Safety fallback response ──────────────────────────────────────
 const SAFETY_FALLBACK = {
   scene:       'Scene detected',
-  confidence:  50,
+  confidence:  0.50,
   description: 'This image could not be fully described. Please try pointing the camera at your surroundings again.',
   objects:     [],
   obstacles:   [],
@@ -350,5 +350,99 @@ exports.testConnection = async (req, res) => {
       candidatesTried: MODEL_CANDIDATES,
       hint:            'Set GEMINI_MODEL in server/.env — see available models at https://aistudio.google.com/app/prompts',
     });
+  }
+};
+
+// ── Hazard Prompt & Parsing ──────────────────────────────────────
+const HAZARD_PROMPT = `You are VisionBridge, an AI assistant for low-vision users.
+
+Previous Scene:
+{sceneMemory}
+
+Analyze the CURRENT image.
+Ignore objects that have not changed.
+Only mention:
+- New hazards
+- Moving obstacles
+- Changes in the environment
+- Navigation warnings
+- Important safety information
+- Objects suddenly moving closer or into the frame
+
+If nothing important changed, simply reply: "No significant change."
+
+At the end of every response, generate a NEW scene summary in ONE SHORT SENTENCE.
+
+Return JSON only:
+{
+  "speech": "...",
+  "sceneSummary": "..."
+}`;
+
+function parseHazardResponse(rawText) {
+  let cleaned = rawText.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    cleaned = fenceMatch[1].trim();
+  }
+  if (!cleaned.startsWith('{')) {
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd   = cleaned.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd > jsonStart) {
+      cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    return {
+      speech: String(parsed.speech || 'No significant change.'),
+      sceneSummary: String(parsed.sceneSummary || 'Scene unchanged.'),
+      timestamp: Date.now(),
+    };
+  } catch {
+    console.warn('[Vision] Hazard JSON parse failed, returning fallback');
+    return {
+      speech: 'No significant change.',
+      sceneSummary: 'Scene unchanged.',
+      timestamp: Date.now(),
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// POST /api/vision/hazard
+// ─────────────────────────────────────────────────────────────────
+exports.analyzeHazard = async (req, res, next) => {
+  try {
+    const { imageBase64, mimeType, sceneMemory } = req.visionData;
+    console.log(`[Vision] analyzeHazard — base64 length: ${imageBase64.length}`);
+
+    const client = getClient();
+    const prompt = HAZARD_PROMPT.replace('{sceneMemory}', sceneMemory || 'No previous context.');
+
+    const geminiResult = await generateWithFallback(client, [
+      prompt,
+      {
+        inlineData: {
+          data:     imageBase64,
+          mimeType,
+        },
+      },
+    ]);
+
+    const rawText = safeExtractText(geminiResult);
+    if (!rawText) {
+      return res.status(200).json({ success: true, data: { speech: 'No significant change.', sceneSummary: sceneMemory || '', timestamp: Date.now() } });
+    }
+
+    const data = parseHazardResponse(rawText);
+    console.log(`[Vision Hazard] speech: "${data.speech}" | summary: "${data.sceneSummary}"`);
+    return res.status(200).json({ success: true, data });
+
+  } catch (err) {
+    const { status, code, message } = classifyGeminiError(err);
+    console.error(`[Vision Hazard] Error [${code}] ${message}`);
+    return res.status(status).json({ success: false, error: message, code });
   }
 };

@@ -61,4 +61,12 @@ router.post(
   visionController.analyzeImage
 );
 
+// ── POST /api/vision/hazard ───────────────────────────────────────
+// Continuous background scanning loop.
+router.post(
+  '/hazard',
+  validateVisionRequest,
+  visionController.analyzeHazard
+);
+
 module.exports = router;

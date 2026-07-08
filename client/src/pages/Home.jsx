@@ -45,6 +45,22 @@ const COMMANDS = [
     route: '/sos',
     variant: 'cmd-tile--sos',
   },
+  {
+    id: 'transport',
+    icon: '🚍',
+    label: 'Public Transport',
+    voiceHint: 'Say "Public transport"',
+    route: '/transport',
+    variant: '',
+  },
+  {
+    id: 'finder',
+    icon: '🔍',
+    label: 'Object Finder',
+    voiceHint: 'Say "Find my wallet"',
+    route: '/finder',
+    variant: '',
+  },
 ];
 
 function Home() {

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { analyzeImage } from '../../services/visionService';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { analyzeImage, analyzeHazard } from '../../services/visionService';
 import LiveCameraView from '../../components/LiveCameraView';
 import './AIAssistant.css';
 
@@ -23,6 +23,12 @@ function speak(text) {
     utterance.rate = 0.95;
     window.speechSynthesis.speak(utterance);
   }
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
 }
 
 /**
@@ -190,8 +196,28 @@ function AIAssistant() {
   const [imageUrl, setImageUrl] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const CONFIDENCE_THRESHOLD = 0.70;
 
-  // ── Execute Analysis API Call ──────────────────────────────────
+  // Hazard Mode State
+  const [isHazardMode, setIsHazardMode] = useState(false);
+  const [hazardStatus, setHazardStatus] = useState('idle'); // 'scanning', 'paused'
+  const [sceneMemory, setSceneMemory] = useState('No previous context.');
+  const [lastSpeech, setLastSpeech] = useState('');
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Timer for Hazard Mode
+  useEffect(() => {
+    let timer;
+    if (isHazardMode && hazardStatus === 'scanning') {
+      timer = setInterval(() => setElapsedTime((prev) => prev + 1), 1000);
+    } else {
+      clearInterval(timer);
+    }
+    return () => clearInterval(timer);
+  }, [isHazardMode, hazardStatus]);
+
+  // ── Execute Analysis API Call (Manual Mode) ────────────────────
   const executeAnalysis = async (base64Payload) => {
     setStatus('loading');
     setError(null);
@@ -199,6 +225,13 @@ function AIAssistant() {
 
     try {
       const data = await analyzeImage(base64Payload, 'image/jpeg');
+      
+      if (data.confidence !== undefined && data.confidence < CONFIDENCE_THRESHOLD) {
+        setStatus('low-confidence');
+        speak("I'm not confident enough to answer accurately. Would you like to connect with a volunteer?");
+        return;
+      }
+
       setResult(data);
       setStatus('result');
     } catch (err) {
@@ -208,13 +241,13 @@ function AIAssistant() {
     }
   };
 
-  // ── Live Camera Capture Handler ────────────────────────────────
+  // ── Live Camera Capture Handler (Manual Mode) ──────────────────
   const handleCameraCapture = (base64, sizeKB, dataUrl) => {
     setImageUrl(dataUrl);
     executeAnalysis(base64);
   };
 
-  // ── Secondary File Upload Handler ──────────────────────────────
+  // ── Secondary File Upload Handler (Manual Mode) ────────────────
   const handleSelectFile = async (file) => {
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError(`Unsupported type "${file.type}". Please select a JPG, PNG, WebP, or GIF.`);
@@ -232,6 +265,51 @@ function AIAssistant() {
       executeAnalysis(base64);
     } catch {
       setError('Could not process the image. Please try a different one.');
+    }
+  };
+
+  // ── Continuous Capture Handler (Hazard Mode) ───────────────────
+  const handleContinuousCapture = async (base64, sizeKB, dataUrl) => {
+    if (!isHazardMode || hazardStatus !== 'scanning') return;
+
+    try {
+      const data = await analyzeHazard(base64, 'image/jpeg', sceneMemory);
+      
+      setSceneMemory(data.sceneSummary);
+      setLastSpeech(data.speech);
+
+      const speechLower = (data.speech || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+      if (!speechLower.includes('no significant change')) {
+        speak(data.speech);
+      }
+    } catch (err) {
+      if (err.message === 'RATE_LIMIT') {
+        setHazardStatus('paused');
+        speak('Scanning paused. Rate limit reached. Please wait.');
+        setTimeout(() => {
+          setHazardStatus('scanning');
+          speak('Resuming scan.');
+        }, 15000); // Wait 15s before resuming
+      } else {
+        console.error('Hazard scan error:', err);
+      }
+    }
+  };
+
+  // ── Toggle Hazard Mode ─────────────────────────────────────────
+  const toggleHazardMode = () => {
+    if (isHazardMode) {
+      setIsHazardMode(false);
+      setHazardStatus('idle');
+      setSceneMemory('No previous context.');
+      setLastSpeech('');
+      setElapsedTime(0);
+      speak('Hazard mode disabled.');
+    } else {
+      setIsHazardMode(true);
+      setHazardStatus('scanning');
+      setElapsedTime(0);
+      speak('Hazard mode enabled. Continuously scanning surroundings for hazards.');
     }
   };
 
@@ -259,12 +337,52 @@ function AIAssistant() {
         <span className="camera-header__icon" aria-hidden="true">🎙️</span>
         <h1 className="camera-header__title">AI Camera Assistant</h1>
         <p className="camera-header__desc">
-          Point your camera at your surroundings and tap Capture. I'll analyze the scene and describe everything aloud instantly.
+          Point your camera at your surroundings and tap Capture, or enable Hazard Mode for continuous safety monitoring.
         </p>
       </header>
 
       {/* Page body */}
       <div className="camera-body container" style={{ maxWidth: '720px', margin: '0 auto' }}>
+        
+        {/* HAZARD MODE TOGGLE */}
+        {status === 'camera' && (
+          <div className={`hazard-toggle-box ${isHazardMode ? 'active' : ''}`}>
+            <div className="hazard-toggle-header">
+              <div>
+                <h2 className="hazard-title">🚨 Hazard Prioritization</h2>
+                <p className="hazard-desc">Continuous background scanning for obstacles.</p>
+              </div>
+              <button 
+                className={`hazard-btn ${isHazardMode ? 'btn-stop' : 'btn-start'}`}
+                onClick={toggleHazardMode}
+                aria-pressed={isHazardMode}
+                aria-label={isHazardMode ? 'Stop Hazard Mode' : 'Start Hazard Mode'}
+              >
+                {isHazardMode ? '⏹️ Stop' : '▶️ Start'}
+              </button>
+            </div>
+            
+            {isHazardMode && (
+              <div className="hazard-active-panel">
+                <div className="hazard-status-bar">
+                  <span className={`hazard-indicator ${hazardStatus === 'scanning' ? 'pulse' : ''}`} />
+                  <span className="hazard-status-text">
+                    {hazardStatus === 'scanning' ? 'Live Scanning...' : 'Paused (Rate Limit)'}
+                  </span>
+                  <span className="hazard-timer">{formatTime(elapsedTime)}</span>
+                </div>
+                
+                <div className="hazard-memory-box">
+                  <p className="hazard-memory-label">Last Spoken Hazard:</p>
+                  <p className="hazard-memory-value highlight">
+                    {lastSpeech || 'None yet.'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div className="error-msg" role="alert" aria-live="assertive" style={{ marginBottom: '2rem' }}>
             <span aria-hidden="true">⚠️</span>
@@ -285,8 +403,10 @@ function AIAssistant() {
           <LiveCameraView
             onCapture={handleCameraCapture}
             onSelectFile={handleSelectFile}
-            buttonLabel="Tap Capture to Analyze Surroundings"
-            secondaryLabel="Upload from Device"
+            onContinuousCapture={handleContinuousCapture}
+            autoCaptureInterval={isHazardMode && hazardStatus === 'scanning' ? 5000 : null}
+            buttonLabel={isHazardMode ? "Scanning Automatically..." : "Tap Capture to Analyze"}
+            secondaryLabel={isHazardMode ? "Disabled in Hazard Mode" : "Upload from Device"}
           />
         )}
 
@@ -315,6 +435,36 @@ function AIAssistant() {
               />
             )}
             <ResultResponse result={result} onReset={handleReset} />
+          </div>
+        )}
+
+        {/* STEP 4: LOW CONFIDENCE HANDOFF */}
+        {status === 'low-confidence' && (
+          <div style={{ background: 'var(--bg-card)', border: '4px solid var(--border)', borderRadius: '24px', padding: '3rem 2rem', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+            <span aria-hidden="true" style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>🤔</span>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
+            <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
+              I'm not confident enough to answer this accurately.<br/><br/>
+              Would you like to connect with a volunteer for human assistance?
+            </p>
+            <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={() => navigate('/volunteer', { state: { source: 'AI Camera Assistant' } })}
+                style={{ background: '#3b82f6', color: '#fff', border: 'none', minHeight: '64px', fontSize: '1.35rem', fontWeight: 900 }}
+              >
+                ✅ Yes, Connect to Volunteer
+              </button>
+              <button
+                type="button"
+                className="btn-outline"
+                onClick={handleReset}
+                style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '2px solid var(--border)', minHeight: '64px', fontSize: '1.35rem', fontWeight: 900 }}
+              >
+                ❌ No, Try Camera Again
+              </button>
+            </div>
           </div>
         )}
       </div>

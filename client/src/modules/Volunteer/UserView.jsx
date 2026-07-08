@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import io from 'socket.io-client';
+import { useLocation } from 'react-router-dom';
 import { createHelpRequest, getMessages, sendMessage, completeRequest } from '../../services/volunteerService';
 import LiveMap from './LiveMap';
 
@@ -25,6 +26,9 @@ function UserView() {
   const [activeRequest, setActiveRequest] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+
+  const locationState = useLocation().state || {};
+  const { source, object } = locationState;
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -53,6 +57,13 @@ function UserView() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   }, []);
+
+  // Prefill help description if handed off from Object Finder
+  useEffect(() => {
+    if (object) {
+      setHelpDescription(`Please help me find my ${object}.`);
+    }
+  }, [object]);
 
   // ── Setup Socket.io when Request is Created ────────────────────
   useEffect(() => {
@@ -276,6 +287,17 @@ function UserView() {
     <div className="volunteer-card">
       <h2 className="volunteer-card-title">🚨 Request Human Assistance</h2>
       
+      {source && (
+        <div style={{ padding: '1.5rem', background: 'var(--bg-card)', border: '3px solid var(--accent)', borderRadius: 'var(--radius)', marginBottom: '1.5rem', textAlign: 'center' }}>
+          <span aria-hidden="true" style={{ fontSize: '2.5rem', display: 'block', marginBottom: '0.5rem' }}>🤖 ➡️ 🧑</span>
+          <h3 style={{ fontSize: '1.4rem', color: 'var(--accent)', fontWeight: 800, marginBottom: '0.5rem' }}>AI Handoff</h3>
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+            The AI couldn't confidently analyze your request from <strong>{source}</strong>.<br/>
+            A volunteer can assist you.
+          </p>
+        </div>
+      )}
+
       {error && (
         <div style={{ padding: '1rem', background: 'rgba(239,68,68,0.2)', border: '2px solid var(--emergency)', borderRadius: 'var(--radius)', marginBottom: '1.5rem', fontWeight: 700, color: '#ff7070' }}>
           ⚠️ {error}
@@ -327,6 +349,12 @@ function UserView() {
             </button>
             <button type="button" className="volunteer-preset-btn" onClick={() => handlePresetClick('Guide me to the grocery store.')}>
               🛒 Grocery Store
+            </button>
+            <button type="button" className="volunteer-preset-btn" onClick={() => handlePresetClick('Please describe my surroundings.')}>
+              📸 Describe surroundings
+            </button>
+            <button type="button" className="volunteer-preset-btn" onClick={() => handlePresetClick('Please read this text for me.')}>
+              📖 Read text
             </button>
           </div>
         </div>
