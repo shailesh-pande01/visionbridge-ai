@@ -44,7 +44,7 @@ Instead of relying on tiny text and complex menus, VisionBridge uses massive tou
 
 | Home Dashboard (Voice UI) | AI Camera Assistant | Volunteer Tracking Radar |
 | :---: | :---: | :---: |
-| <img src="https://placehold.co/300x500/1e1e1e/FFF?text=Home+Screen" width="250" /> | <img src="https://placehold.co/300x500/1e1e1e/FFF?text=Camera+View" width="250" /> | <img src="https://placehold.co/300x500/1e1e1e/FFF?text=Live+Radar" width="250" /> |
+| <img width="1919" height="969" alt="Screenshot 2026-07-10 131243" src="https://github.com/user-attachments/assets/63cba20f-cdf8-4a42-a9cd-b5670b1ea6d9" />| <img width="824" height="871" alt="Screenshot 2026-07-10 132221" src="https://github.com/user-attachments/assets/776f4d41-3035-412c-b8a2-31170a5f0f4f" />| <img width="749" height="823" alt="Screenshot 2026-07-10 131515" src="https://github.com/user-attachments/assets/2e22383a-edbb-42fc-9986-56fc911cf60e" /> |
 
 ---
 
