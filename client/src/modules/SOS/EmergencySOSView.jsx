@@ -11,39 +11,21 @@ function speak(text) {
 }
 
 function EmergencySOSView() {
-  // 'idle' | 'countdown' | 'sending' | 'active'
-  const [status, setStatus] = useState('idle');
+  // 'IDLE' | 'COUNTDOWN' | 'GETTING_LOCATION' | 'ACTIVE' | 'ENDED' | 'ERROR'
+  const [status, setStatus] = useState('IDLE');
   const [countdown, setCountdown] = useState(5);
   const [activeEvent, setActiveEvent] = useState(null);
   const [error, setError] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
-  const [location, setLocation] = useState({ latitude: 18.5204, longitude: 73.8567, address: 'Locating...' });
+  const [location, setLocation] = useState(null);
 
   const timerRef = useRef(null);
   const locationIntervalRef = useRef(null);
   const recognitionRef = useRef(null);
-  // CRITICAL GUARD: Prevents multiple triggers from interim results or computer speaker audio feedback
   const isTriggeringRef = useRef(false);
 
-  // ── 1 · Auto Detect Location on Mount ──────────────────────────────
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          setLocation({ latitude, longitude, address: `Approximate GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
-        },
-        () => {
-          // Fallback location
-          setLocation({ latitude: 18.5204, longitude: 73.8567, address: 'Pune, Maharashtra (Fallback Location)' });
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
-    }
-  }, []);
-
-  // ── 2 · Setup Voice Activation (SpeechRecognition) ──────────────
+  // ── 1 · Setup Voice Activation (SpeechRecognition) ──────────────
   const startVoiceRecognition = useCallback(() => {
     if (isTriggeringRef.current) return;
 
@@ -82,10 +64,9 @@ function EmergencySOSView() {
     recognition.onend = () => {
       console.log('[Voice SOS] Microphone disconnected.');
       setIsListening(false);
-      // Only attempt restart if we are genuinely in idle state and NOT triggering SOS
-      if (status === 'idle' && !isTriggeringRef.current) {
+      if (status === 'IDLE' && !isTriggeringRef.current) {
         setTimeout(() => {
-          if (recognitionRef.current && status === 'idle' && !isTriggeringRef.current) {
+          if (recognitionRef.current && status === 'IDLE' && !isTriggeringRef.current) {
             try { recognitionRef.current.start(); } catch {}
           }
         }, 1000);
@@ -93,7 +74,6 @@ function EmergencySOSView() {
     };
 
     recognition.onresult = (event) => {
-      // If we are already triggering an alert, ignore all further speech results instantly
       if (isTriggeringRef.current) return;
 
       let fullTranscript = '';
@@ -124,7 +104,7 @@ function EmergencySOSView() {
   }, [status]);
 
   useEffect(() => {
-    if (status === 'idle' && !isTriggeringRef.current) {
+    if (status === 'IDLE' && !isTriggeringRef.current) {
       startVoiceRecognition();
     } else if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
@@ -135,7 +115,7 @@ function EmergencySOSView() {
     };
   }, [status, startVoiceRecognition]);
 
-  // ── 3 · Countdown Timer Management ──────────────────────────────
+  // ── 2 · Countdown Timer Management ──────────────────────────────
   const handleInitiateSOS = useCallback(() => {
     isTriggeringRef.current = true;
     if (recognitionRef.current) {
@@ -143,7 +123,7 @@ function EmergencySOSView() {
     }
     if (timerRef.current) clearInterval(timerRef.current);
 
-    setStatus('countdown');
+    setStatus('COUNTDOWN');
     setCountdown(5);
     speak('Emergency alert will be sent in 5 seconds.');
 
@@ -163,7 +143,7 @@ function EmergencySOSView() {
   const handleCancelSOS = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     isTriggeringRef.current = false;
-    setStatus('idle');
+    setStatus('IDLE');
     setCountdown(5);
     speak('Emergency alert cancelled.');
     setTimeout(() => {
@@ -171,67 +151,101 @@ function EmergencySOSView() {
     }, 500);
   };
 
-  // ── 4 · Execute SOS Trigger ─────────────────────────────────────
-  const executeSOS = async () => {
-    setStatus('sending');
-    speak('Sending emergency alert...');
+  // ── 3 · Execute SOS Trigger ─────────────────────────────────────
+  const executeSOS = () => {
+    setStatus('GETTING_LOCATION');
+    speak('Getting location...');
 
-    try {
-      const data = await triggerSOS(location.latitude, location.longitude, location.address);
-      setActiveEvent(data.event);
-      setStatus('active');
-      speak('Emergency alert sent successfully. Live location is now being shared.');
-
-      // Start continuous live location sharing every 10 seconds
-      locationIntervalRef.current = setInterval(() => {
-        if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const { latitude, longitude } = pos.coords;
-              setLocation({ latitude, longitude, address: `Approximate GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` });
-              if (data.event?._id) {
-                updateLiveLocation(data.event._id, latitude, longitude, `Approximate GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`).catch(() => {});
-              }
-            },
-            () => {},
-            { enableHighAccuracy: true }
-          );
-        }
-      }, 10000);
-
-    } catch (err) {
-      setError(err.message);
-      isTriggeringRef.current = false;
-      setStatus('idle');
-      speak('Failed to send emergency alert.');
+    if (!('geolocation' in navigator)) {
+      handleLocationError('Geolocation not supported by your browser.');
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const loc = { latitude, longitude, address: `Approximate GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}` };
+        setLocation(loc);
+
+        try {
+          const event = await triggerSOS(loc.latitude, loc.longitude, loc.address);
+          setActiveEvent(event);
+          setStatus('ACTIVE');
+          
+          if (event.whatsappSent) {
+            speak('Emergency activated. Your location has been sent to your emergency contact.');
+          } else {
+            speak('Emergency activated, but the WhatsApp alert could not be sent.');
+          }
+
+          locationIntervalRef.current = setInterval(() => {
+            if ('geolocation' in navigator) {
+              navigator.geolocation.getCurrentPosition(
+                (pos2) => {
+                  const lat = pos2.coords.latitude;
+                  const lon = pos2.coords.longitude;
+                  const newLoc = { latitude: lat, longitude: lon, address: `Approximate GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}` };
+                  setLocation(newLoc);
+                  if (event?.id) {
+                    updateLiveLocation(event.id, lat, lon, newLoc.address).catch(() => {});
+                  }
+                },
+                () => {},
+                { enableHighAccuracy: true }
+              );
+            }
+          }, 10000);
+        } catch (err) {
+          setError(err.message);
+          isTriggeringRef.current = false;
+          setStatus('ERROR');
+          speak('Failed to send emergency alert.');
+        }
+      },
+      (err) => {
+        handleLocationError('Permission denied or timeout.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
-  // ── 5 · End Emergency ───────────────────────────────────────────
+  const handleLocationError = (msg) => {
+    setError(msg);
+    isTriggeringRef.current = false;
+    setStatus('ERROR');
+    speak('Unable to get your location. Please enable location access.');
+  };
+
+  const resetToIdle = () => {
+    setError(null);
+    setStatus('IDLE');
+    isTriggeringRef.current = false;
+    setTimeout(() => {
+      startVoiceRecognition();
+    }, 500);
+  };
+
+  // ── 4 · End Emergency ───────────────────────────────────────────
   const handleEndEmergency = async () => {
     if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
     if (!activeEvent) {
-      isTriggeringRef.current = false;
-      setStatus('idle');
+      resetToIdle();
       return;
     }
 
     try {
-      await endEmergency(activeEvent._id);
+      await endEmergency(activeEvent.id);
       setActiveEvent(null);
       isTriggeringRef.current = false;
-      setStatus('idle');
-      speak('Emergency ended.');
-      setTimeout(() => {
-        startVoiceRecognition();
-      }, 500);
+      setStatus('ENDED');
+      speak('Emergency mode ended.');
     } catch (err) {
       alert('Failed to end emergency: ' + err.message);
     }
   };
 
   // ───────────────────────────────────────────────────────────────
-  if (status === 'countdown') {
+  if (status === 'COUNTDOWN') {
     return (
       <div className="sos-countdown-card" role="alert" aria-live="assertive">
         <h2 className="sos-countdown-title">🚨 ALERT INITIATED</h2>
@@ -246,16 +260,16 @@ function EmergencySOSView() {
     );
   }
 
-  if (status === 'sending') {
+  if (status === 'GETTING_LOCATION') {
     return (
       <div className="sos-card" style={{ textAlign: 'center', padding: '5rem 2rem' }}>
-        <h2 style={{ fontSize: '2rem', fontWeight: 900 }}>📡 Broadcasting SOS...</h2>
-        <p style={{ fontSize: '1.35rem', color: '#94a3b8', marginTop: '1rem' }}>Alerting all trusted emergency contacts via SMS &amp; Push...</p>
+        <h2 style={{ fontSize: '2rem', fontWeight: 900 }}>📍 Acquiring GPS Location...</h2>
+        <p style={{ fontSize: '1.35rem', color: '#94a3b8', marginTop: '1rem' }}>Please wait while we pinpoint your exact coordinates...</p>
       </div>
     );
   }
 
-  if (status === 'active') {
+  if (status === 'ACTIVE' && location) {
     return (
       <div className="sos-card sos-card--emergency" role="alert" aria-live="assertive">
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
@@ -264,11 +278,23 @@ function EmergencySOSView() {
             SOS ALERT ACTIVE
           </h2>
           <p style={{ fontSize: '1.35rem', color: '#cbd5e1', marginBottom: '2rem' }}>
-            Your trusted emergency contacts have been notified with your live GPS location.
+            {activeEvent?.whatsappSent ? (
+              <>
+                <span style={{ color: '#22c55e', fontWeight: 'bold' }}>WhatsApp Alert: Sent ✓</span><br/>
+                <span style={{ color: '#22c55e', fontWeight: 'bold' }}>Location: Shared ✓</span>
+              </>
+            ) : (
+              <span style={{ color: '#fca5a5' }}>
+                Emergency activated, but WhatsApp alert could not be sent. Please contact your emergency contact manually.
+              </span>
+            )}
           </p>
           <div style={{ padding: '1.5rem', background: '#271414', border: '3px solid #ef4444', borderRadius: '16px', textAlign: 'left' }}>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.5rem' }}>📍 Live Location Sharing</h3>
-            <p style={{ fontSize: '1.25rem', color: '#94a3b8', marginBottom: '1rem' }}>{location.address}</p>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', marginBottom: '0.5rem' }}>📍 Location Details</h3>
+            <p style={{ fontSize: '1.25rem', color: '#94a3b8', marginBottom: '0.5rem' }}>Coordinates: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}</p>
+            {activeEvent && activeEvent.timestamp && (
+              <p style={{ fontSize: '1.1rem', color: '#94a3b8', marginBottom: '1rem' }}>Time: {new Date(activeEvent.timestamp).toLocaleString()}</p>
+            )}
             <a href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', fontSize: '1.25rem', fontWeight: 800, textDecoration: 'underline' }}>
               🔗 Open Google Maps Link
             </a>
@@ -281,15 +307,35 @@ function EmergencySOSView() {
     );
   }
 
-  // default: 'idle'
+  if (status === 'ENDED') {
+    return (
+      <div className="sos-card" style={{ textAlign: 'center', padding: '5rem 2rem' }}>
+        <h2 style={{ fontSize: '2rem', fontWeight: 900, color: '#22c55e' }}>✅ Emergency Ended</h2>
+        <p style={{ fontSize: '1.35rem', color: '#94a3b8', marginTop: '1rem', marginBottom: '2rem' }}>Your emergency alert has been deactivated.</p>
+        <button type="button" className="sos-btn-block" style={{ background: '#334155' }} onClick={resetToIdle}>
+          Return to IDLE
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'ERROR') {
+    return (
+      <div className="sos-card" style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '2rem', fontWeight: 900, color: '#ef4444', marginBottom: '1rem' }}>⚠️ Action Required</h2>
+        <div style={{ padding: '1.25rem', background: '#271414', border: '3px solid #ef4444', borderRadius: '16px', marginBottom: '2rem', fontWeight: 800, color: '#fca5a5', fontSize: '1.25rem' }}>
+          Unable to get your location. Please enable location access. {error && `(${error})`}
+        </div>
+        <button type="button" className="sos-btn-block" style={{ background: '#334155' }} onClick={resetToIdle}>
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  // default: 'IDLE'
   return (
     <div className="sos-card" style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
-      {error && (
-        <div style={{ padding: '1.25rem', background: '#271414', border: '3px solid #ef4444', borderRadius: '16px', marginBottom: '2rem', fontWeight: 800, color: '#fca5a5', fontSize: '1.25rem' }}>
-          ⚠️ {error}
-        </div>
-      )}
-
       {voiceError && (
         <div style={{ padding: '1rem', background: '#301c1c', border: '2px solid #ef4444', borderRadius: '12px', marginBottom: '1.5rem', fontWeight: 700, color: '#fca5a5', fontSize: '1.15rem' }}>
           🎙️ {voiceError}

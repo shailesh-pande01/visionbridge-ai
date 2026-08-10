@@ -5,19 +5,26 @@ const emergencyEventSchema = new mongoose.Schema({
     type: String,
     default: 'default_user',
   },
-  currentLocation: {
-    latitude: { type: Number, required: true },
-    longitude: { type: Number, required: true },
-    address: { type: String, default: '' },
+  latitude: {
+    type: Number,
+    required: true,
   },
-  googleMapsLink: {
+  longitude: {
+    type: Number,
+    required: true,
+  },
+  locationUrl: {
     type: String,
     required: true,
   },
   status: {
     type: String,
-    enum: ['Active', 'Ended'],
-    default: 'Active',
+    enum: ['ACTIVE', 'ENDED'],
+    default: 'ACTIVE',
+  },
+  whatsappSent: {
+    type: Boolean,
+    default: false,
   },
   endedAt: {
     type: Date,

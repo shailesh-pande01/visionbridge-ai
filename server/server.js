@@ -14,6 +14,7 @@ const volunteerRoutes = require('./routes/volunteerRoutes'); // Volunteer Help
 const sosRoutes       = require('./routes/sosRoutes');
 const transportRoutes = require('./routes/transportRoutes');
 const finderRoutes    = require('./routes/finderRoutes');
+const emergencyRoutes = require('./routes/emergencyRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -82,6 +83,7 @@ app.use('/api/reading',   readingRoutes);
 app.use('/api/location',  locationRoutes);
 app.use('/api/volunteer', volunteerRoutes);
 app.use('/api/sos',       sosRoutes);
+app.use('/api/emergency', emergencyRoutes);
 app.use('/api/transport', transportRoutes);
 app.use('/api/object-finder', finderRoutes);
 

@@ -178,3 +178,99 @@ exports.endEmergency = async (req, res, next) => {
     next(err);
   }
 };
+
+const whatsappService = require('../services/whatsappService');
+
+// ── 8 · New Functional Emergency Flow ──────────────────────────────
+exports.triggerEmergency = async (req, res, next) => {
+  try {
+    const { userId, latitude, longitude } = req.body;
+    
+    // Validate coordinates
+    if (latitude == null || longitude == null || isNaN(latitude) || isNaN(longitude)) {
+      return res.status(400).json({ success: false, error: 'Valid latitude and longitude are required.' });
+    }
+
+    const uId = userId || 'default_user';
+    const locationUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+
+    const event = new EmergencyEvent({
+      userId: uId,
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      locationUrl,
+      status: 'ACTIVE',
+    });
+    
+    await event.save();
+
+    console.log(`\n🚨 [NEW EMERGENCY SOS] Event ID: ${event._id}`);
+    console.log(`📍 Location: ${latitude}, ${longitude}`);
+    console.log(`🔗 Link: ${locationUrl}`);
+
+    // Call WhatsApp Service
+    const whatsappSent = await whatsappService.sendEmergencyAlert(
+      uId,
+      event.latitude,
+      event.longitude,
+      event.locationUrl,
+      event.createdAt
+    );
+
+    if (whatsappSent) {
+      event.whatsappSent = true;
+      await event.save();
+    }
+
+    if (req.io) {
+      req.io.emit('sos_triggered_v2', { event });
+    }
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: event._id,
+        status: event.status,
+        whatsappSent: event.whatsappSent,
+        coordinates: { latitude: event.latitude, longitude: event.longitude },
+        timestamp: event.createdAt,
+        locationUrl: event.locationUrl
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.endEmergencyRequest = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const event = await EmergencyEvent.findById(id);
+    
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Emergency event not found.' });
+    }
+
+    event.status = 'ENDED';
+    event.endedAt = new Date();
+    await event.save();
+
+    console.log(`\n🛑 [EMERGENCY SOS ENDED] Event ID: ${event._id}`);
+
+    if (req.io) {
+      req.io.emit('sos_ended_v2', { eventId: event._id });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: event._id,
+        status: event.status,
+        timestamp: event.endedAt
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+

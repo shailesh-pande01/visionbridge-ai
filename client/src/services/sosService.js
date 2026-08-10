@@ -44,7 +44,7 @@ export async function deleteContact(id) {
 }
 
 export async function triggerSOS(latitude, longitude, address = '', userId = 'default_user') {
-  const resp = await fetch(`${API_BASE}/api/sos/trigger`, {
+  const resp = await fetch(`${API_BASE}/api/emergency/sos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ latitude, longitude, address, userId }),
@@ -66,8 +66,8 @@ export async function updateLiveLocation(eventId, latitude, longitude, address =
 }
 
 export async function endEmergency(eventId) {
-  const resp = await fetch(`${API_BASE}/api/sos/event/${eventId}/end`, {
-    method: 'POST',
+  const resp = await fetch(`${API_BASE}/api/emergency/sos/${eventId}/end`, {
+    method: 'PATCH',
   });
   const data = await resp.json();
   if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to end emergency');
