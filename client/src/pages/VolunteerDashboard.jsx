@@ -30,7 +30,7 @@ function VolunteerDashboard() {
 
   const fetchRequests = async () => {
     try {
-      const res = await fetch(`/api/volunteer/requests?volunteerId=${user._id}`);
+      const res = await fetch(`${SOCKET_SERVER}/api/volunteer/requests?volunteerId=${user._id}`);
       const data = await res.json();
       if (data.success) {
         setRequests(data.data);
@@ -44,7 +44,7 @@ function VolunteerDashboard() {
 
   const handleAction = async (id, action) => {
     try {
-      const res = await fetch(`/api/volunteer/request/${id}/${action}`, {
+      const res = await fetch(`${SOCKET_SERVER}/api/volunteer/request/${id}/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ volunteerId: user._id }),
