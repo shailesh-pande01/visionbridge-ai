@@ -4,11 +4,13 @@
 // Integrates Socket.io via req.io and mock Firebase notifications.
 // ─────────────────────────────────────────────────────────────────
 
-const Volunteer   = require('../models/Volunteer');
+const User        = require('../models/User');
 const HelpRequest = require('../models/HelpRequest');
 const Message     = require('../models/Message');
 
 // ── 1 · Volunteer Registration / Seeding ──────────────────────────
+// Note: This is mostly replaced by /api/auth/register for real auth,
+// but kept for backward compatibility if needed.
 exports.registerVolunteer = async (req, res, next) => {
   try {
     const { name, phone, latitude, longitude } = req.body;
@@ -16,21 +18,18 @@ exports.registerVolunteer = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Name, phone, latitude, and longitude are required.' });
     }
 
-    let volunteer = await Volunteer.findOne({ phone });
-    if (volunteer) {
-      volunteer.name = name;
-      volunteer.location = { latitude: Number(latitude), longitude: Number(longitude) };
-      volunteer.availability = true;
-      await volunteer.save();
-    } else {
-      volunteer = new Volunteer({
-        name,
-        phone,
-        location: { latitude: Number(latitude), longitude: Number(longitude) },
-        availability: true,
-      });
-      await volunteer.save();
-    }
+    // Creating a mock user for this legacy endpoint
+    const username = `vol_${Date.now()}`;
+    const volunteer = new User({
+      name,
+      username,
+      password: 'mockpassword', // should use auth/register
+      role: 'volunteer',
+      phone,
+      location: { latitude: Number(latitude), longitude: Number(longitude) },
+      availability: true,
+    });
+    await volunteer.save();
 
     res.status(200).json({ success: true, data: volunteer });
   } catch (err) {
@@ -41,7 +40,7 @@ exports.registerVolunteer = async (req, res, next) => {
 // ── 2 · Get Available Volunteers (Utility) ────────────────────────
 exports.getVolunteers = async (req, res, next) => {
   try {
-    const volunteers = await Volunteer.find({ availability: true });
+    const volunteers = await User.find({ role: 'volunteer', availability: true }).select('-password');
     res.status(200).json({ success: true, data: volunteers });
   } catch (err) {
     next(err);
@@ -66,7 +65,6 @@ exports.createHelpRequest = async (req, res, next) => {
 
     await newRequest.save();
 
-    // Mock Firebase Cloud Messaging Notification & Socket.io broadcast to volunteers
     console.log(`[Notification] FCM Mock: Broadcasting new help request to nearby volunteers for request ${newRequest._id}`);
     if (req.io) {
       req.io.to('volunteers').emit('new_help_request', newRequest);
@@ -81,7 +79,6 @@ exports.createHelpRequest = async (req, res, next) => {
 // ── 4 · Get Nearby Requests (Volunteer Dashboard) ─────────────────
 exports.getNearbyRequests = async (req, res, next) => {
   try {
-    // Return all active searching requests, plus any accepted requests for this volunteer
     const { volunteerId } = req.query;
 
     const query = {
@@ -95,7 +92,7 @@ exports.getNearbyRequests = async (req, res, next) => {
     }
 
     const requests = await HelpRequest.find(query)
-      .populate('volunteer')
+      .populate({ path: 'volunteer', select: '-password' })
       .sort({ createdAt: -1 });
 
     res.status(200).json({ success: true, data: requests });
@@ -108,7 +105,7 @@ exports.getNearbyRequests = async (req, res, next) => {
 exports.getRequestStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const helpRequest = await HelpRequest.findById(id).populate('volunteer');
+    const helpRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
     if (!helpRequest) {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
     }
@@ -129,8 +126,8 @@ exports.acceptRequest = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Volunteer ID is required.' });
     }
 
-    const volunteer = await Volunteer.findById(volunteerId);
-    if (!volunteer) {
+    const volunteer = await User.findById(volunteerId);
+    if (!volunteer || volunteer.role !== 'volunteer') {
       return res.status(404).json({ success: false, error: 'Volunteer not found.' });
     }
 
@@ -147,13 +144,11 @@ exports.acceptRequest = async (req, res, next) => {
     helpRequest.volunteer = volunteer._id;
     await helpRequest.save();
 
-    // Mark volunteer as busy
     volunteer.availability = false;
     await volunteer.save();
 
-    const updatedRequest = await HelpRequest.findById(id).populate('volunteer');
+    const updatedRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
 
-    // Notify user via Socket.io
     if (req.io) {
       req.io.to(id).emit('request_accepted', updatedRequest);
       req.io.to('volunteers').emit('request_updated', updatedRequest);
@@ -169,8 +164,6 @@ exports.acceptRequest = async (req, res, next) => {
 exports.rejectRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    // Rejecting simply dismisses it for the volunteer or marks it rejected if no volunteers left
-    // For simplicity, we can leave it as searching so other volunteers can accept, or mark rejected
     const helpRequest = await HelpRequest.findById(id);
     if (!helpRequest) {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
@@ -203,10 +196,10 @@ exports.completeRequest = async (req, res, next) => {
     await helpRequest.save();
 
     if (helpRequest.volunteer) {
-      await Volunteer.findByIdAndUpdate(helpRequest.volunteer, { availability: true });
+      await User.findByIdAndUpdate(helpRequest.volunteer, { availability: true });
     }
 
-    const updatedRequest = await HelpRequest.findById(id).populate('volunteer');
+    const updatedRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
 
     if (req.io) {
       req.io.to(id).emit('request_completed', updatedRequest);
@@ -263,14 +256,14 @@ exports.getMessages = async (req, res, next) => {
 exports.updateLocation = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role, latitude, longitude, volunteerId } = req.body; // role: 'requester' | 'volunteer'
+    const { role, latitude, longitude, volunteerId } = req.body;
 
     if (!role || !latitude || !longitude) {
       return res.status(400).json({ success: false, error: 'Role, latitude, and longitude are required.' });
     }
 
     if (role === 'volunteer' && volunteerId) {
-      await Volunteer.findByIdAndUpdate(volunteerId, { location: { latitude: Number(latitude), longitude: Number(longitude) } });
+      await User.findByIdAndUpdate(volunteerId, { location: { latitude: Number(latitude), longitude: Number(longitude) } });
     } else if (role === 'requester') {
       await HelpRequest.findByIdAndUpdate(id, { currentLocation: { latitude: Number(latitude), longitude: Number(longitude) } });
     }

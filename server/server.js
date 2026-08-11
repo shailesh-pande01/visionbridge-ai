@@ -15,6 +15,7 @@ const sosRoutes       = require('./routes/sosRoutes');
 const transportRoutes = require('./routes/transportRoutes');
 const finderRoutes    = require('./routes/finderRoutes');
 const emergencyRoutes = require('./routes/emergencyRoutes');
+const authRoutes      = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +56,35 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── WebRTC Signaling Events ──
+  socket.on('call:ping', (data) => {
+    socket.to(data.roomId).emit('call:ping');
+  });
+
+  socket.on('call:pong', (data) => {
+    socket.to(data.roomId).emit('call:pong');
+  });
+
+  socket.on('call:offer', (data) => {
+    // data should contain { roomId, offer }
+    socket.to(data.roomId).emit('call:offer', data.offer);
+  });
+
+  socket.on('call:answer', (data) => {
+    // data should contain { roomId, answer }
+    socket.to(data.roomId).emit('call:answer', data.answer);
+  });
+
+  socket.on('call:ice-candidate', (data) => {
+    // data should contain { roomId, candidate }
+    socket.to(data.roomId).emit('call:ice-candidate', data.candidate);
+  });
+
+  socket.on('call:ended', (data) => {
+    // data should contain { roomId }
+    socket.to(data.roomId).emit('call:ended');
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Socket] Client disconnected: ${socket.id}`);
   });
@@ -86,6 +116,7 @@ app.use('/api/sos',       sosRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/transport', transportRoutes);
 app.use('/api/object-finder', finderRoutes);
+app.use('/api/auth',      authRoutes);
 
 // ── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {

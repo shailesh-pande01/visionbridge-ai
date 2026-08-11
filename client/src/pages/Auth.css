@@ -1,0 +1,135 @@
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+  padding: 2rem;
+  background-color: var(--bg-primary);
+}
+
+.auth-box {
+  background: var(--bg-secondary);
+  padding: 3rem;
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-box-large {
+  max-width: 600px;
+}
+
+.auth-box h2 {
+  text-align: center;
+  margin-bottom: 2rem;
+  color: var(--text-primary);
+}
+
+.auth-error {
+  background-color: rgba(255, 68, 68, 0.1);
+  color: #ff4444;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.auth-form .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.auth-form label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 1.1rem;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--primary-cyan);
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 1rem;
+  font-size: 1.2rem;
+  margin-top: 1rem;
+}
+
+.auth-link {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--text-secondary);
+}
+
+.auth-link a {
+  color: var(--primary-cyan);
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.role-selection {
+  margin-bottom: 2rem;
+}
+
+.role-label {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.role-cards {
+  display: flex;
+  gap: 1rem;
+}
+
+.role-card {
+  flex: 1;
+  padding: 1.5rem;
+  border: 2px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.role-card:hover {
+  border-color: var(--primary-cyan);
+}
+
+.role-card.selected {
+  border-color: var(--primary-cyan);
+  background-color: rgba(0, 240, 255, 0.1);
+}
+
+.role-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.2rem;
+}
+
+.role-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 600px) {
+  .role-cards {
+    flex-direction: column;
+  }
+}

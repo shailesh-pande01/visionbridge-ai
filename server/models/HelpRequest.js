@@ -8,7 +8,7 @@ const helpRequestSchema = new mongoose.Schema({
   },
   volunteer: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Volunteer',
+    ref: 'User',
     default: null,
   },
   currentLocation: {

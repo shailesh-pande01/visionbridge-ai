@@ -172,9 +172,9 @@ main:focus {
 /* ── Card ───────────────────────────────────── */
 .card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: var(--radius);
-  padding: 2rem;
+  padding: 1.75rem;
   transition: border-color var(--transition), transform var(--transition);
 }
 .card:hover {

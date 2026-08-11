@@ -1,0 +1,117 @@
+.volunteer-dashboard {
+  min-height: 80vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.dashboard-header {
+  background-color: var(--bg-secondary);
+  padding: 3rem 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  margin: 0 0 0.5rem 0;
+  color: var(--primary-cyan);
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+}
+
+.requests-section h2 {
+  margin-bottom: 1.5rem;
+}
+
+.no-requests {
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 2rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.request-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.request-card.accepted {
+  border-left: 4px solid var(--primary-green);
+}
+
+.request-card.searching {
+  border-left: 4px solid var(--primary-cyan);
+}
+
+.request-info h3 {
+  margin: 0 0 0.5rem 0;
+}
+
+.request-info p {
+  margin: 0.25rem 0;
+  color: var(--text-secondary);
+}
+
+.status-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.status-badge.searching {
+  background-color: rgba(0, 240, 255, 0.1);
+  color: var(--primary-cyan);
+}
+
+.status-badge.accepted {
+  background-color: rgba(0, 255, 136, 0.1);
+  color: var(--primary-green);
+}
+
+.btn-success {
+  background: var(--primary-green);
+  color: #000;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-success:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 600px) {
+  .request-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .request-actions {
+    width: 100%;
+  }
+  
+  .request-actions button {
+    width: 100%;
+  }
+}

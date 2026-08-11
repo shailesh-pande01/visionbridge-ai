@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
 import { createHelpRequest, getMessages, sendMessage, completeRequest } from '../../services/volunteerService';
 import LiveMap from './LiveMap';
+import WebRTCCall from '../../components/WebRTCCall';
 
 const SOCKET_SERVER = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -26,6 +27,7 @@ function UserView() {
   const [activeRequest, setActiveRequest] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  const [isCallActive, setIsCallActive] = useState(false);
 
   const locationState = useLocation().state || {};
   const { source, object } = locationState;
@@ -163,8 +165,8 @@ function UserView() {
   };
 
   const handleCallVolunteer = () => {
-    const phone = activeRequest?.volunteer?.phone || '+1234567890';
-    alert(`Calling Volunteer (${phone})... [Simulated Call]`);
+    setIsCallActive(true);
+    speak('Starting video call with volunteer.');
   };
 
   const handlePresetClick = (text) => {
@@ -228,36 +230,24 @@ function UserView() {
         </div>
 
         {/* Live Map Tracking */}
-        <div className="volunteer-card">
-          <h3 className="volunteer-card-title">📍 Live Tracking</h3>
-          <LiveMap requesterLoc={location} volunteerLoc={volunteerLoc} />
-        </div>
+        {!isCallActive && (
+          <div className="volunteer-card">
+            <h3 className="volunteer-card-title">📍 Live Tracking</h3>
+            <LiveMap requesterLoc={location} volunteerLoc={volunteerLoc} />
+          </div>
+        )}
 
-        {/* Chat UI */}
-        <div className="volunteer-chat">
-          <div className="volunteer-chat-header">
-            <span>💬 Live Chat with {vol.name}</span>
-          </div>
-          <div className="volunteer-chat-messages">
-            {messages.map((m, i) => (
-              <div key={i} className={`volunteer-message ${m.sender === 'requester' ? 'volunteer-message--self' : 'volunteer-message--other'}`}>
-                {m.message}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-          <form onSubmit={handleSendMessage} className="volunteer-chat-input-area">
-            <input
-              type="text"
-              className="volunteer-chat-input"
-              placeholder="Type a message..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              aria-label="Chat message input"
-            />
-            <button type="submit" className="volunteer-chat-send-btn">Send</button>
-          </form>
-        </div>
+        {/* WebRTC Video Call */}
+        {isCallActive && (
+          <WebRTCCall
+            socket={socketRef.current}
+            roomId={activeRequest._id}
+            isVolunteer={false}
+            onEndCall={() => setIsCallActive(false)}
+          />
+        )}
+
+
       </div>
     );
   }

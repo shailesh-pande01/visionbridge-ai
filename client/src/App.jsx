@@ -1,10 +1,18 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 
+import Login from './pages/Login';
+import Register from './pages/Register';
+
 import Home from './pages/Home';
+import VolunteerDashboard from './pages/VolunteerDashboard';
+
 import Features from './pages/Features';
 import About from './pages/About';
 import Contact from './pages/Contact';
@@ -23,44 +31,60 @@ import './App.css';
 function App() {
   return (
     <Router>
-      {/* Accessibility: skip to content link */}
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
+      <AuthProvider>
+        {/* Accessibility: skip to content link */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
 
-      <div className="app">
-        <Navbar />
+        <div className="app">
+          <Navbar />
 
-        <main id="main-content" tabIndex="-1">
-          <Routes>
-            <Route path="/"          element={<Home />} />
-            <Route path="/features"  element={<Features />} />
-            <Route path="/about"     element={<About />} />
-            <Route path="/contact"   element={<Contact />} />
+          <main id="main-content" tabIndex="-1">
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              
+              <Route path="/features" element={<Features />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<Contact />} />
 
-            {/* Feature module routes */}
-            <Route path="/camera"    element={<AIAssistant />} />
-            <Route path="/reading"   element={<ReadingAssistant />} />
-            <Route path="/location"  element={<LocationAssistant />} />
-            <Route path="/volunteer" element={<VolunteerModule />} />
-            <Route path="/sos"       element={<SOSModule />} />
-            <Route path="/transport" element={<TransportAssistant />} />
-            <Route path="/finder"    element={<FinderAssistant />} />
+              {/* Protected Routes for Low-Vision User */}
+              <Route element={<ProtectedRoute allowedRoles={['lowVisionUser']} />}>
+                <Route path="/user/home" element={<Home />} />
+                
+                {/* Feature module routes */}
+                <Route path="/camera"    element={<AIAssistant />} />
+                <Route path="/reading"   element={<ReadingAssistant />} />
+                <Route path="/location"  element={<LocationAssistant />} />
+                <Route path="/volunteer" element={<VolunteerModule />} />
+                <Route path="/sos"       element={<SOSModule />} />
+                <Route path="/transport" element={<TransportAssistant />} />
+                <Route path="/finder"    element={<FinderAssistant />} />
 
-            {/* Alias routes for Voice Command Navigation */}
-            <Route path="/camera-assistant"  element={<Navigate to="/camera" replace />} />
-            <Route path="/reading-assistant" element={<Navigate to="/reading" replace />} />
-            <Route path="/location-assistant" element={<Navigate to="/location" replace />} />
-            <Route path="/volunteer-help"    element={<Navigate to="/volunteer" replace />} />
-            <Route path="/emergency-sos"     element={<Navigate to="/sos" replace />} />
-            <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
-            <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
-            <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
-          </Routes>
-        </main>
+                {/* Alias routes for Voice Command Navigation */}
+                <Route path="/camera-assistant"  element={<Navigate to="/camera" replace />} />
+                <Route path="/reading-assistant" element={<Navigate to="/reading" replace />} />
+                <Route path="/location-assistant" element={<Navigate to="/location" replace />} />
+                <Route path="/volunteer-help"    element={<Navigate to="/volunteer" replace />} />
+                <Route path="/emergency-sos"     element={<Navigate to="/sos" replace />} />
+                <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
+                <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
+                <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
+              </Route>
 
-        <Footer />
-      </div>
+              {/* Protected Routes for Volunteer */}
+              <Route element={<ProtectedRoute allowedRoles={['volunteer']} />}>
+                <Route path="/volunteer/dashboard" element={<VolunteerDashboard />} />
+              </Route>
+            </Routes>
+          </main>
+
+          <Footer />
+        </div>
+      </AuthProvider>
     </Router>
   );
 }
