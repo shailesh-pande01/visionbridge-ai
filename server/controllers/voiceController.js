@@ -59,6 +59,44 @@ Examples:
 'What is in front of me?' → surroundings
 `;
 
+// Model priority list with fallback support
+const MODEL_CANDIDATES = [
+  process.env.GEMINI_MODEL,
+  'gemini-2.5-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
+  'gemini-pro-latest',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3.1-pro-preview',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+].filter(Boolean);
+
+async function generateWithFallback(client, promptParts) {
+  let lastError;
+  for (const modelName of MODEL_CANDIDATES) {
+    try {
+      const model = client.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: "application/json",
+        },
+      });
+      const result = await model.generateContent(promptParts);
+      console.log(`[Voice Intent] Successfully used model: ${modelName}`);
+      return result;
+    } catch (err) {
+      console.warn(`[Voice Intent] Model "${modelName}" failed (${err.message}) - trying next`);
+      lastError = err;
+    }
+  }
+  throw lastError || new Error('No available Gemini model found.');
+}
+
 exports.classifyIntent = async (req, res) => {
   try {
     const { command } = req.body;
@@ -68,15 +106,7 @@ exports.classifyIntent = async (req, res) => {
     }
 
     const client = getClient();
-    const model = client.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-      },
-    });
-
-    const result = await model.generateContent([
+    const result = await generateWithFallback(client, [
       INTENT_PROMPT,
       `User command: "${command}"`
     ]);
@@ -104,7 +134,7 @@ exports.classifyIntent = async (req, res) => {
   } catch (error) {
     console.error('[Voice Intent] Error:', error.message);
     res.status(500).json({
-      error: 'Failed to classify intent',
+      error: 'Failed to classify intent: ' + error.message,
       intent: 'unknown',
       route: null,
       confidence: 0

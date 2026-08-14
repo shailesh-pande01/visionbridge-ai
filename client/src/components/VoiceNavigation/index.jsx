@@ -53,7 +53,8 @@ function VoiceNavigation() {
     cleanupSession(); // Stop listening while we process and navigate
     
     try {
-      const response = await fetch('/api/voice/intent', {
+      const API_BASE = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${API_BASE}/api/voice/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command }),
@@ -61,6 +62,17 @@ function VoiceNavigation() {
       const data = await response.json();
       
       if (!isMountedRef.current) return;
+
+      if (!response.ok) {
+        // Use the explicit error from the backend instead of a generic string
+        setErrorMessage(data.error || 'Server error. Please try again.');
+        setStatus('ERROR');
+        speak('There was an error communicating with the server.');
+        setTimeout(() => {
+          if (isMountedRef.current) startListening(false);
+        }, 4000);
+        return;
+      }
 
       if (data.route) {
         setStatus('NAVIGATING');
