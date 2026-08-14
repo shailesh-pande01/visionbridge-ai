@@ -73,6 +73,8 @@ function App() {
                 <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
                 <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
                 <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
+                <Route path="/where-am-i"        element={<Navigate to="/location" replace />} />
+                <Route path="/hazard-mode"       element={<Navigate to="/camera" replace />} />
               </Route>
 
               {/* Protected Routes for Volunteer */}

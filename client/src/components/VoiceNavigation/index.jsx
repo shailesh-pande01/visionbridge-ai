@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { matchCommand } from '../../utils/commandMatcher';
 import './VoiceNavigation.css';
 
 function speak(text) {
@@ -15,99 +14,201 @@ function speak(text) {
 function VoiceNavigation() {
   const navigate = useNavigate();
 
-  // 'idle' | 'listening' | 'processing' | 'success' | 'error'
-  const [status, setStatus] = useState('idle');
+  // Use both React state for UI and a Ref for safe closure access
+  const [status, _setStatus] = useState('IDLE');
+  const statusRef = useRef('IDLE');
+  const setStatus = (newStatus) => {
+    statusRef.current = newStatus;
+    _setStatus(newStatus);
+  };
+
   const [recognizedText, setRecognizedText] = useState('');
-  const [detectedCommand, setDetectedCommand] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
 
   const recognitionRef = useRef(null);
-  const timeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const wakeWordDetectedRef = useRef(false);
+  const commandBufferRef = useRef('');
+  const pauseTimerRef = useRef(null);
+  const retryCountRef = useRef(0);
 
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+  const cleanupSession = () => {
+    if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+    if (recognitionRef.current) {
+      // Remove listeners to prevent stale callbacks and zombie instances
+      recognitionRef.current.onend = null;
+      recognitionRef.current.onerror = null;
+      recognitionRef.current.onresult = null;
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+    }
+  };
+
+  const processCommand = async (command) => {
+    // Duplicate command protection
+    if (statusRef.current === 'PROCESSING_COMMAND' || statusRef.current === 'NAVIGATING') return;
+    
+    console.log('[VoiceNav] Processing command:', command);
+    setStatus('PROCESSING_COMMAND');
+    cleanupSession(); // Stop listening while we process and navigate
+    
+    try {
+      const response = await fetch('/api/voice/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command }),
+      });
+      const data = await response.json();
+      
+      if (!isMountedRef.current) return;
+
+      if (data.route) {
+        setStatus('NAVIGATING');
+        speak(`Opening ${data.intent} assistant.`);
+        setTimeout(() => {
+          if (isMountedRef.current) {
+            // Reset to IDLE before navigating so if we come back via browser cache, it starts fresh
+            setStatus('IDLE');
+            navigate(data.route);
+          }
+        }, 2000);
+      } else {
+        setErrorMessage('I didn\'t understand that. Please say Vision followed by your request.');
+        setStatus('ERROR');
+        speak('I didn\'t understand that. Please try again.');
+        setTimeout(() => {
+          if (isMountedRef.current) startListening(false);
+        }, 4000);
       }
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, []);
+    } catch (err) {
+      console.error('[VoiceNav] API error', err);
+      if (!isMountedRef.current) return;
+      
+      setErrorMessage('Failed to process command.');
+      setStatus('ERROR');
+      setTimeout(() => {
+        if (isMountedRef.current) startListening(false);
+      }, 4000);
+    }
+  };
 
-  // ── Start Listening Handler ────────────────────────────────────
-  const handleStartListening = useCallback(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  const startListening = (isRetry = false) => {
+    if (!isMountedRef.current) return;
+    cleanupSession(); // Ensure no active session exists
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setErrorMessage('Browser does not support Speech Recognition. Please use Chrome, Edge, or Safari.');
-      setStatus('error');
+      setErrorMessage('Browser does not support Speech Recognition.');
+      setStatus('ERROR');
       speak('Speech recognition is not supported in your browser.');
       return;
     }
 
-    setStatus('listening');
-    setRecognizedText('');
-    setDetectedCommand(null);
-    setErrorMessage('');
-    speak('Listening.');
+    if (!isRetry) {
+      setStatus('LISTENING_FOR_WAKE_WORD');
+      setRecognizedText('');
+      setErrorMessage('');
+      wakeWordDetectedRef.current = false;
+      commandBufferRef.current = '';
+      retryCountRef.current = 0;
+    }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    // Timeout if no speech detected within 8 seconds
-    timeoutRef.current = setTimeout(() => {
-      if (status === 'listening' || recognitionRef.current) {
-        try { recognition.stop(); } catch {}
-        setErrorMessage('No speech detected. Please try again.');
-        setStatus('error');
-        speak('No speech detected. Please try again.');
-      }
-    }, 8000);
-
     recognition.onstart = () => {
       console.log('[VoiceNav] Mic active');
+      retryCountRef.current = 0; // Reset retries on successful start
     };
 
     recognition.onerror = (event) => {
       console.error('[VoiceNav] Error:', event.error);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      try { recognition.stop(); } catch {}
+      if (!isMountedRef.current) return;
 
       if (event.error === 'not-allowed') {
-        setErrorMessage('Microphone permission denied. Please allow microphone access in your browser settings.');
-        speak('Microphone permission denied.');
-      } else if (event.error === 'no-speech') {
-        setErrorMessage('No speech detected. Please try again.');
-        speak('No speech detected. Please try again.');
+        setErrorMessage('Microphone permission denied.');
+        setStatus('ERROR');
+      } else if (event.error === 'no-speech' || event.error === 'network') {
+        // Will trigger onend naturally and auto-restart if appropriate
+      } else if (event.error === 'aborted') {
+        // Intentionally aborted to clear transcript or stop
       } else {
-        setErrorMessage(`Recognition error: ${event.error}. Please try again.`);
-        speak('I couldn\'t understand that command. Please try again.');
+        setErrorMessage(`Recognition error: ${event.error}`);
+        setStatus('ERROR');
       }
-      setStatus('error');
     };
 
     recognition.onresult = (event) => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (!isMountedRef.current) return;
 
-      let fullTranscript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        fullTranscript += event.results[i][0].transcript;
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
       }
-      setRecognizedText(fullTranscript);
 
-      // If final result, process it
-      if (event.results[event.results.length - 1].isFinal) {
-        try { recognition.stop(); } catch {}
-        setStatus('processing');
-        processTranscript(fullTranscript);
+      const fullTranscript = (finalTranscript + interimTranscript).trim().toLowerCase();
+      
+      if (!wakeWordDetectedRef.current) {
+        // Check for wake word
+        if (fullTranscript.includes('vision') || fullTranscript.includes('hey vision') || fullTranscript.includes('okay vision')) {
+          console.log('[VoiceNav] Wake word detected in:', fullTranscript);
+          wakeWordDetectedRef.current = true;
+          setStatus('WAKE_WORD_DETECTED');
+          speak('Yes?');
+          
+          setTimeout(() => {
+            if (isMountedRef.current && statusRef.current === 'WAKE_WORD_DETECTED') {
+              setStatus('LISTENING_FOR_COMMAND');
+            }
+          }, 1000);
+          
+          // Abort to clear the recognized transcript. onend will catch it and auto-restart with isRetry=true
+          try { recognition.abort(); } catch {}
+        }
+      } else {
+        setRecognizedText(fullTranscript);
+        commandBufferRef.current = fullTranscript;
+        
+        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+        
+        if (finalTranscript || interimTranscript) {
+          // Wait for user to pause speaking before processing
+          pauseTimerRef.current = setTimeout(() => {
+            if (!isMountedRef.current) return;
+            const cmd = commandBufferRef.current.trim();
+            if (cmd.length > 0 && (statusRef.current === 'LISTENING_FOR_COMMAND' || statusRef.current === 'WAKE_WORD_DETECTED')) {
+               processCommand(cmd);
+            }
+          }, 1500);
+        }
       }
     };
 
     recognition.onend = () => {
-      console.log('[VoiceNav] Mic disconnected');
+      console.log('[VoiceNav] Mic disconnected. Status:', statusRef.current);
+      if (!isMountedRef.current) return;
+
+      // Auto-restart if we are in a listening state
+      if (statusRef.current === 'LISTENING_FOR_WAKE_WORD' || 
+          statusRef.current === 'WAKE_WORD_DETECTED' || 
+          statusRef.current === 'LISTENING_FOR_COMMAND') {
+        
+        if (retryCountRef.current < 5) {
+          retryCountRef.current++;
+          startListening(true); // Preserve state
+        } else {
+          setStatus('ERROR');
+          setErrorMessage('Speech recognition stopped unexpectedly too many times.');
+        }
+      }
     };
 
     recognitionRef.current = recognition;
@@ -116,45 +217,34 @@ function VoiceNavigation() {
     } catch (err) {
       console.error('[VoiceNav] Start failed:', err);
     }
-  }, [status]);
-
-  // ── Process Spoken Command ─────────────────────────────────────
-  const processTranscript = (transcript) => {
-    console.log('[VoiceNav] Processing final transcript:', transcript);
-    const match = matchCommand(transcript);
-
-    if (match) {
-      setDetectedCommand(match);
-      setStatus('success');
-      speak(`Command recognized. ${match.confirmationMessage}`);
-
-      // Allow voice confirmation to play before navigating
-      setTimeout(() => {
-        navigate(match.route);
-      }, 2500);
-    } else {
-      setErrorMessage(`Unknown command: "${transcript}".`);
-      setStatus('error');
-      speak('I couldn\'t understand that command. Please try again.');
-    }
   };
 
+  // Mount/Unmount lifecycle
+  useEffect(() => {
+    isMountedRef.current = true;
+    startListening(false);
+    
+    return () => {
+      isMountedRef.current = false;
+      cleanupSession();
+    };
+  }, []);
+
   const handleCancel = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    }
-    setStatus('idle');
+    cleanupSession();
+    setStatus('IDLE');
     setRecognizedText('');
     setErrorMessage('');
     speak('Listening cancelled.');
   };
+  
+  const handleStartManual = () => {
+    startListening(false);
+  };
 
-  // ───────────────────────────────────────────────────────────────
   return (
     <div className="voice-nav-container" aria-live="assertive">
-      {/* ERROR STATE */}
-      {status === 'error' && (
+      {status === 'ERROR' && (
         <div className="voice-nav-error" role="alert">
           <h3 className="voice-nav-error__title">⚠️ Recognition Error</h3>
           <p className="voice-nav-error__text">{errorMessage}</p>
@@ -162,72 +252,76 @@ function VoiceNavigation() {
             <button type="button" className="voice-nav-action-btn voice-nav-btn-cancel" onClick={handleCancel}>
               ✕ Cancel
             </button>
-            <button type="button" className="voice-nav-action-btn voice-nav-btn-retry" onClick={handleStartListening}>
+            <button type="button" className="voice-nav-action-btn voice-nav-btn-retry" onClick={handleStartManual}>
               🔄 Retry
             </button>
           </div>
         </div>
       )}
 
-      {/* SUCCESS STATE */}
-      {status === 'success' && detectedCommand && (
+      {status === 'NAVIGATING' && (
         <div style={{ width: '100%', padding: '2.5rem 1.5rem', background: '#162a1c', border: '4px solid #22c55e', borderRadius: '20px', textAlign: 'center' }}>
           <span style={{ fontSize: '4rem', display: 'block', marginBottom: '1rem' }}>✓</span>
           <h3 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#22c55e' }}>Command Recognized</h3>
           <p className="voice-nav-recognized">"{recognizedText}"</p>
-          <p className="voice-nav-detected">{detectedCommand.confirmationMessage}</p>
           <p style={{ fontSize: '1.25rem', color: '#94a3b8' }}>Navigating automatically...</p>
         </div>
       )}
 
-      {/* PROCESSING STATE */}
-      {status === 'processing' && (
+      {status === 'PROCESSING_COMMAND' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div className="voice-nav-processing">
             <span style={{ fontSize: '4rem' }}>⏳</span>
           </div>
-          <h3 className="voice-nav-status-label">Processing Command...</h3>
+          <h3 className="voice-nav-status-label">Understanding...</h3>
           {recognizedText && <p className="voice-nav-recognized">"{recognizedText}"</p>}
         </div>
       )}
 
-      {/* LISTENING STATE */}
-      {status === 'listening' && (
+      {status === 'LISTENING_FOR_COMMAND' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-          <div className="voice-nav-listening" onClick={handleCancel} role="button" tabIndex={0} aria-label="Listening. Tap to cancel.">
+          <div className="voice-nav-listening" onClick={handleCancel} role="button" tabIndex={0} aria-label="Listening for command">
             <span style={{ fontSize: '5rem' }}>🎙️</span>
-            <span style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.5rem' }}>Listening...</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.5rem' }}>Speak</span>
           </div>
-          <h3 className="voice-nav-status-label">Listening for a Command</h3>
-          {recognizedText ? (
+          <h3 className="voice-nav-status-label">Vision detected. Listening for your command...</h3>
+          {recognizedText && (
             <p className="voice-nav-recognized">"{recognizedText}"</p>
-          ) : (
-            <p style={{ fontSize: '1.35rem', color: '#94a3b8', marginTop: '0.5rem' }}>Speak clearly now...</p>
           )}
-          <div className="voice-nav-actions" style={{ marginTop: '2rem' }}>
-            <button type="button" className="voice-nav-action-btn voice-nav-btn-cancel" onClick={handleCancel}>
-              ✕ Stop / Cancel
-            </button>
-          </div>
         </div>
       )}
 
-      {/* IDLE STATE */}
-      {status === 'idle' && (
+      {status === 'WAKE_WORD_DETECTED' && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-          <div className="voice-nav-wrap" role="presentation">
+          <div className="voice-nav-listening" role="button" tabIndex={0} aria-label="Wake word detected">
+            <span style={{ fontSize: '5rem' }}>✨</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.5rem' }}>Vision!</span>
+          </div>
+          <h3 className="voice-nav-status-label">Yes?</h3>
+        </div>
+      )}
+
+      {status === 'LISTENING_FOR_WAKE_WORD' && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <div className="voice-nav-wrap" role="presentation" onClick={handleCancel}>
             <span className="voice-nav-ring voice-nav-ring--1" aria-hidden="true" />
             <span className="voice-nav-ring voice-nav-ring--2" aria-hidden="true" />
-            <span className="voice-nav-ring voice-nav-ring--3" aria-hidden="true" />
-
-            <button
-              className="voice-nav-btn"
-              type="button"
-              onClick={handleStartListening}
-              aria-label="Voice assistant — tap to speak a command"
-            >
+            
+            <button className="voice-nav-btn" type="button" aria-label="Listening for Wake Word">
               <span className="voice-nav-btn__icon" aria-hidden="true">🎙️</span>
-              <span className="voice-nav-btn__text">Tap to Speak</span>
+              <span className="voice-nav-btn__text" style={{fontSize: '1rem'}}>Say "Vision"</span>
+            </button>
+          </div>
+          <h3 className="voice-nav-status-label">Listening...</h3>
+        </div>
+      )}
+
+      {status === 'IDLE' && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+          <div className="voice-nav-wrap" role="presentation">
+            <button className="voice-nav-btn" type="button" onClick={handleStartManual} aria-label="Start listening">
+              <span className="voice-nav-btn__icon" aria-hidden="true">🎙️</span>
+              <span className="voice-nav-btn__text">Start</span>
             </button>
           </div>
         </div>

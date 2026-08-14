@@ -16,6 +16,7 @@ const transportRoutes = require('./routes/transportRoutes');
 const finderRoutes    = require('./routes/finderRoutes');
 const emergencyRoutes = require('./routes/emergencyRoutes');
 const authRoutes      = require('./routes/authRoutes');
+const voiceRoutes     = require('./routes/voiceRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -117,6 +118,7 @@ app.use('/api/emergency', emergencyRoutes);
 app.use('/api/transport', transportRoutes);
 app.use('/api/object-finder', finderRoutes);
 app.use('/api/auth',      authRoutes);
+app.use('/api/voice',     voiceRoutes);
 
 // ── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {
