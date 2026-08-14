@@ -208,6 +208,15 @@ function VoiceNavigation() {
       console.log('[VoiceNav] Mic disconnected. Status:', statusRef.current);
       if (!isMountedRef.current) return;
 
+      // Mobile browsers aggressively stop SpeechRecognition on pauses. 
+      // If we have a pending command in the buffer, process it immediately rather than restarting.
+      if ((statusRef.current === 'LISTENING_FOR_COMMAND' || statusRef.current === 'WAKE_WORD_DETECTED') 
+          && commandBufferRef.current.trim().length > 0) {
+        console.log('[VoiceNav] Mic stopped by OS, processing pending command immediately.');
+        processCommand(commandBufferRef.current.trim());
+        return;
+      }
+
       // Auto-restart if we are in a listening state
       if (statusRef.current === 'LISTENING_FOR_WAKE_WORD' || 
           statusRef.current === 'WAKE_WORD_DETECTED' || 
