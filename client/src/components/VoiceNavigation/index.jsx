@@ -203,10 +203,17 @@ function VoiceNavigation() {
         
         if (retryCountRef.current < 5) {
           retryCountRef.current++;
-          startListening(true); // Preserve state
+          // Add a small delay to prevent tight infinite loops if the browser is blocking it
+          setTimeout(() => {
+            if (isMountedRef.current) startListening(true); // Preserve state
+          }, 400);
         } else {
-          setStatus('ERROR');
-          setErrorMessage('Speech recognition stopped unexpectedly too many times.');
+          // If it fails repeatedly without starting (often due to mobile browser requiring a user gesture),
+          // gracefully fall back to the IDLE "Start" button instead of a scary error.
+          cleanupSession();
+          setStatus('IDLE');
+          setRecognizedText('');
+          setErrorMessage('');
         }
       }
     };
@@ -222,9 +229,14 @@ function VoiceNavigation() {
   // Mount/Unmount lifecycle
   useEffect(() => {
     isMountedRef.current = true;
-    startListening(false);
+    
+    // Slight delay on initial mount helps prevent instant browser blocks on deployed sites
+    const mountTimer = setTimeout(() => {
+      if (isMountedRef.current) startListening(false);
+    }, 500);
     
     return () => {
+      clearTimeout(mountTimer);
       isMountedRef.current = false;
       cleanupSession();
     };
