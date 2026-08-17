@@ -1,0 +1,142 @@
+/* ─────────────────────────────────────────────────────────────────
+   VoiceController.css
+   The persistent voice status bar. Fixed to the bottom of the screen
+   so the assistant's state is always in the same place — large type,
+   high contrast, generous touch targets.
+   ───────────────────────────────────────────────────────────────── */
+
+.vb-voice-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900;
+
+  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: #050B15;
+  border-top: 4px solid var(--border, rgba(0, 212, 255, 0.18));
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.65);
+}
+
+.vb-voice-bar--listening { border-top-color: var(--accent, #00D4FF); }
+.vb-voice-bar--active    { border-top-color: #22C55E; }
+.vb-voice-bar--busy      { border-top-color: #F59E0B; }
+.vb-voice-bar--error     { border-top-color: #EF4444; }
+.vb-voice-bar--idle      { border-top-color: #475569; }
+
+/* Visually hidden, but announced by screen readers */
+.vb-voice-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.vb-voice-bar__row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.vb-voice-bar__icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.vb-voice-bar__icon--pulse {
+  animation: vb-voice-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes vb-voice-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vb-voice-bar__icon--pulse { animation: none; }
+}
+
+.vb-voice-bar__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.vb-voice-bar__status {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #FFFFFF;
+  line-height: 1.25;
+}
+
+.vb-voice-bar--listening .vb-voice-bar__status { color: var(--accent, #00D4FF); }
+.vb-voice-bar--active    .vb-voice-bar__status { color: #4ADE80; }
+.vb-voice-bar--error     .vb-voice-bar__status { color: #FCA5A5; }
+
+.vb-voice-bar__feature {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #94A3B8;
+  margin-top: 0.15rem;
+}
+
+.vb-voice-bar__btn {
+  flex-shrink: 0;
+  min-height: 56px;
+  min-width: 120px;
+  padding: 0.5rem 1.1rem;
+
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #E8EDF5;
+
+  background: #1E293B;
+  border: 3px solid #475569;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.vb-voice-bar__btn--primary {
+  background: var(--accent, #00D4FF);
+  border-color: var(--accent, #00D4FF);
+  color: #060E1A;
+}
+
+.vb-voice-bar__btn:focus-visible {
+  outline: 4px solid #FFFFFF;
+  outline-offset: 3px;
+}
+
+.vb-voice-bar__transcript,
+.vb-voice-bar__response,
+.vb-voice-bar__error {
+  max-width: 900px;
+  margin: 0.75rem auto 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.vb-voice-bar__transcript { color: #E8EDF5; }
+.vb-voice-bar__response   { color: #CBD5E1; }
+.vb-voice-bar__error      { color: #FCA5A5; font-weight: 800; }
+
+/* Keeps page content clear of the fixed bar */
+.vb-voice-spacer {
+  height: 150px;
+}
+
+@media (max-width: 520px) {
+  .vb-voice-bar__status     { font-size: 1.15rem; }
+  .vb-voice-bar__btn        { min-width: 96px; font-size: 0.95rem; }
+  .vb-voice-bar__transcript,
+  .vb-voice-bar__response   { font-size: 1.05rem; }
+}

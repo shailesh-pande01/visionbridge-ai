@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import LowVisionLayout from './voice/LowVisionLayout';
 
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -51,30 +52,34 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/contact" element={<Contact />} />
 
-              {/* Protected Routes for Low-Vision User */}
+              {/* Protected Routes for Low-Vision User.
+                  LowVisionLayout mounts the global voice assistant once,
+                  so it survives every navigation between these screens. */}
               <Route element={<ProtectedRoute allowedRoles={['lowVisionUser']} />}>
-                <Route path="/user/home" element={<Home />} />
-                
-                {/* Feature module routes */}
-                <Route path="/camera"    element={<AIAssistant />} />
-                <Route path="/reading"   element={<ReadingAssistant />} />
-                <Route path="/location"  element={<LocationAssistant />} />
-                <Route path="/volunteer" element={<VolunteerModule />} />
-                <Route path="/sos"       element={<SOSModule />} />
-                <Route path="/transport" element={<TransportAssistant />} />
-                <Route path="/finder"    element={<FinderAssistant />} />
+                <Route element={<LowVisionLayout />}>
+                  <Route path="/user/home" element={<Home />} />
 
-                {/* Alias routes for Voice Command Navigation */}
-                <Route path="/camera-assistant"  element={<Navigate to="/camera" replace />} />
-                <Route path="/reading-assistant" element={<Navigate to="/reading" replace />} />
-                <Route path="/location-assistant" element={<Navigate to="/location" replace />} />
-                <Route path="/volunteer-help"    element={<Navigate to="/volunteer" replace />} />
-                <Route path="/emergency-sos"     element={<Navigate to="/sos" replace />} />
-                <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
-                <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
-                <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
-                <Route path="/where-am-i"        element={<Navigate to="/location" replace />} />
-                <Route path="/hazard-mode"       element={<Navigate to="/camera" replace />} />
+                  {/* Feature module routes */}
+                  <Route path="/camera"    element={<AIAssistant />} />
+                  <Route path="/reading"   element={<ReadingAssistant />} />
+                  <Route path="/location"  element={<LocationAssistant />} />
+                  <Route path="/volunteer" element={<VolunteerModule />} />
+                  <Route path="/sos"       element={<SOSModule />} />
+                  <Route path="/transport" element={<TransportAssistant />} />
+                  <Route path="/finder"    element={<FinderAssistant />} />
+
+                  {/* Alias routes for Voice Command Navigation */}
+                  <Route path="/camera-assistant"  element={<Navigate to="/camera" replace />} />
+                  <Route path="/reading-assistant" element={<Navigate to="/reading" replace />} />
+                  <Route path="/location-assistant" element={<Navigate to="/location" replace />} />
+                  <Route path="/volunteer-help"    element={<Navigate to="/volunteer" replace />} />
+                  <Route path="/emergency-sos"     element={<Navigate to="/sos" replace />} />
+                  <Route path="/public-transport"  element={<Navigate to="/transport" replace />} />
+                  <Route path="/transport-assistant" element={<Navigate to="/transport" replace />} />
+                  <Route path="/object-finder"     element={<Navigate to="/finder" replace />} />
+                  <Route path="/where-am-i"        element={<Navigate to="/location" replace />} />
+                  <Route path="/hazard-mode"       element={<Navigate to="/camera" replace />} />
+                </Route>
               </Route>
 
               {/* Protected Routes for Volunteer */}

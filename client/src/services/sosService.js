@@ -3,10 +3,16 @@
 // API calls for Emergency SOS feature.
 // ─────────────────────────────────────────────────────────────────
 
+import { getAuthHeaders } from './session';
+
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 export async function getContacts(userId = 'default_user') {
-  const resp = await fetch(`${API_BASE}/api/sos/contacts?userId=${userId}`);
+  const resp = await fetch(`${API_BASE}/api/sos/contacts?userId=${encodeURIComponent(userId)}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   const data = await resp.json();
   if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to fetch contacts');
   return data.data;
@@ -15,7 +21,10 @@ export async function getContacts(userId = 'default_user') {
 export async function addContact(name, phone, relationship, userId = 'default_user') {
   const resp = await fetch(`${API_BASE}/api/sos/contact`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ name, phone, relationship, userId }),
   });
   const data = await resp.json();
@@ -26,7 +35,10 @@ export async function addContact(name, phone, relationship, userId = 'default_us
 export async function updateContact(id, name, phone, relationship) {
   const resp = await fetch(`${API_BASE}/api/sos/contact/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ name, phone, relationship }),
   });
   const data = await resp.json();
@@ -37,6 +49,9 @@ export async function updateContact(id, name, phone, relationship) {
 export async function deleteContact(id) {
   const resp = await fetch(`${API_BASE}/api/sos/contact/${id}`, {
     method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
   });
   const data = await resp.json();
   if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to delete contact');
@@ -46,7 +61,10 @@ export async function deleteContact(id) {
 export async function triggerSOS(latitude, longitude, address = '', userId = 'default_user') {
   const resp = await fetch(`${API_BASE}/api/emergency/sos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ latitude, longitude, address, userId }),
   });
   const data = await resp.json();
@@ -57,7 +75,10 @@ export async function triggerSOS(latitude, longitude, address = '', userId = 'de
 export async function updateLiveLocation(eventId, latitude, longitude, address = '') {
   const resp = await fetch(`${API_BASE}/api/sos/event/${eventId}/location`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ latitude, longitude, address }),
   });
   const data = await resp.json();
@@ -68,6 +89,9 @@ export async function updateLiveLocation(eventId, latitude, longitude, address =
 export async function endEmergency(eventId) {
   const resp = await fetch(`${API_BASE}/api/emergency/sos/${eventId}/end`, {
     method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+    },
   });
   const data = await resp.json();
   if (!resp.ok || !data.success) throw new Error(data.error || 'Failed to end emergency');

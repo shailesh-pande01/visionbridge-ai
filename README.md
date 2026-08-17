@@ -50,11 +50,13 @@ Instead of relying on tiny text and complex menus, VisionBridge uses massive tou
 
 ## ✨ Key Features
 
-### 🎙️ 1. Voice Command Navigation
-The entire application can be navigated hands-free. A giant animated microphone on the homepage listens for natural language commands (e.g., *"Describe my surroundings"*, *"Find my wallet"*, *"Help me"*). The system intelligently maps spoken intent to the correct feature using the browser `SpeechRecognition` API.
+### 🎙️ 1. Conversational Voice Assistant — wake word "Vision"
+The entire application is hands-free. One global listener runs across every authenticated low-vision screen: say **"Vision"** followed by anything in plain language — *"read this menu"*, *"capture"*, *"what is the price of paneer butter masala?"*, *"find my wallet"*, *"go home"*, *"emergency"*.
+
+Commands are interpreted by Gemini and returned as **structured actions from a fixed whitelist** — the model never produces a route or executable code. The assistant also remembers the result of your last capture per feature, so follow-up questions are answered from what it already saw instead of asking for another photo.
 
 ### 📷 2. AI Camera Assistant
-A practical, camera-first experience. By pointing their device's rear camera and tapping a giant capture button, users receive an instant auditory description of their surroundings. 
+A practical, camera-first experience. Point the rear camera and say *"Vision, capture"* (or tap the giant capture button) for an instant auditory description of your surroundings — then ask follow-up questions about the same image.
 
 ### ⚠️ 3. AI Hazard Prioritization
 Safety is paramount. While using the camera, the app continuously scans the environment every few seconds in the background. It actively looks for immediate dangers like stairs, obstacles, or traffic, immediately interrupting other speech to shout a warning if a hazard is detected.
@@ -66,7 +68,7 @@ Point the camera at medicine labels, restaurant menus, or documents. VisionBridg
 A specialized module tuned for traveling. It focuses exclusively on extracting bus numbers, train platform signs, and street navigation cues, parsing complex noisy imagery into reliable, structured travel data.
 
 ### 🔍 6. Smart Object Finder
-Lost your keys? Ask the AI, *"Find my wallet"*. The AI scans the camera feed looking specifically for that object. If found, it will tell you exactly where it is relative to the camera (e.g., *"Your wallet is on the table, to your left"*).
+Lost your keys? Say *"Vision, find my wallet"*. The AI scans the camera feed looking specifically for that object. If found, it will tell you exactly where it is relative to the camera (e.g., *"Your wallet is on the table, to your left"*).
 
 ### 📍 7. "Where Am I?" Location Assistant
 Replaces complex visual maps with simple, auditory geographical awareness. Using geolocation and OpenStreetMap data, it translates coordinates into natural language context: *"You are near the City Library."*
@@ -80,11 +82,38 @@ When AI isn't enough, humans step in. Users can broadcast a help request to near
 - **Instant Connections:** Volunteers can view the user's live camera feed and GPS location to guide them safely.
 
 ### 🚨 10. Emergency SOS
-Speed and reliability for critical moments. Shouting *"Emergency"* or *"SOS"* starts a 5-second countdown. It automatically sends live GPS tracking links and distress messages to pre-configured trusted contacts.
+Speed and reliability for critical moments. Saying *"Vision, emergency"* from anywhere in the app starts a 5-second countdown. It automatically sends live GPS tracking links and distress messages to pre-configured trusted contacts.
 
 ---
 
 ## ⚙️ Architecture & AI Workflow
+
+### The Conversational Voice Layer
+
+One `SpeechRecognition` instance for the whole app, mounted above the feature routes so it survives navigation, the back button and feature switches.
+
+```mermaid
+graph TD
+    A[Continuous listening] --> B{Wake word "Vision"?}
+    B -- No --> A
+    B -- Yes --> C[Capture command until the user pauses]
+    C --> D{Safety-critical or everyday command?}
+    D -- Yes --> E[Local fast path: emergency, capture, home, stop]
+    D -- No --> F[POST /api/assistant/command with the active feature's context slice]
+    F --> G[Gemini intent prompt → structured action]
+    G --> H{Follow-up question?}
+    H -- Yes --> I[Gemini answer prompt over stored context]
+    H -- No --> J[Validate against action whitelist]
+    I --> J
+    E --> J
+    J --> K[Execute: navigate, capture, answer, confirm]
+    K --> L[Speak the result] --> A
+```
+
+Key properties:
+- **Whitelist only.** `server/services/assistantActions.js` and `client/src/voice/actions.js` define every permitted action and feature target. Anything else collapses to `UNKNOWN`.
+- **Bounded memory.** One slot per feature, a 4-turn rolling conversation, hard character caps and a 15-minute TTL — only the active feature's slice is ever sent.
+- **Emergency is never conversational.** "Vision, emergency" matches locally and opens SOS immediately, with the existing 5-second cancel window.
 
 ### The "Human-in-the-Loop" Workflow
 
@@ -127,12 +156,15 @@ visionbridge/
 ├── client/                     # React Frontend
 │   ├── public/
 │   └── src/
-│       ├── components/         # Reusable UI (Voice Navigation, Live Camera)
+│       ├── components/         # Reusable UI (Live Camera, Navbar, WebRTC call)
+│       ├── voice/              # Global voice assistant (controller, action map,
+│       │                       #   session memory, speech, low-vision layout)
 │       ├── modules/            # Feature logic (AIAssistant, Finder, Transport, SOS, Volunteer)
 │       ├── pages/              # Main routing pages (Home)
-│       └── services/           # API integrations (visionService, transportService, etc.)
+│       └── services/           # API integrations (assistantService, visionService, etc.)
 ├── server/                     # Node.js Backend
-│   ├── controllers/            # Route logic (visionController, readingController, etc.)
+│   ├── controllers/            # Route logic (assistantController, visionController, etc.)
+│   ├── services/               # Shared Gemini client, assistant prompts & action whitelist
 │   ├── middleware/             # Rate limiters & request sanitization
 │   ├── models/                 # Mongoose schemas (Volunteer, SOS)
 │   ├── routes/                 # Express API routes
@@ -165,6 +197,11 @@ Create a `.env` file in the `server` directory:
 PORT=5000
 MONGODB_URI=mongodb://127.0.0.1:27017/visionbridge
 GEMINI_API_KEY=your_google_gemini_api_key_here
+
+# Optional: pin a specific Gemini model. When unset, the server tries a
+# built-in candidate list until one answers. The key stays backend-only —
+# it is never exposed to the React client.
+GEMINI_MODEL=gemini-2.5-flash
 ```
 Start the backend server:
 ```bash
@@ -188,7 +225,8 @@ npm start
 ## 📱 Usage & Testing Tips
 - **Microphone & Camera Permissions:** Because VisionBridge heavily relies on hardware APIs (`getUserMedia`, `SpeechRecognition`), you **must** run the app on `localhost` or serve it over a secure `https://` connection.
 - **Desktop Testing:** Use the "Upload from Device" fallback buttons inside the camera modules if your desktop lacks a webcam.
-- **Voice Navigation:** Click the large central mic button on the home page and speak *"Describe surroundings"* to see the routing engine in action.
+- **Voice Assistant:** Allow the microphone when prompted, then just say *"Vision, what is around me?"* — no button press needed. If a browser refuses to auto-start the microphone, tap anywhere (or the **Start Listening** button in the bottom status bar) to re-arm it.
+- **Try a full conversation:** *"Vision, read this menu"* → *"Vision, capture"* → *"Vision, what is the cheapest item?"* → *"Vision, go home"*. The last three answer from memory without taking another photo.
 
 ---
 

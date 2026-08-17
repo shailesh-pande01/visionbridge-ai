@@ -4,6 +4,7 @@
 // Integrates Socket.io via req.io and mock Firebase notifications.
 // ─────────────────────────────────────────────────────────────────
 
+const mongoose    = require('mongoose');
 const User        = require('../models/User');
 const HelpRequest = require('../models/HelpRequest');
 const Message     = require('../models/Message');
@@ -50,24 +51,51 @@ exports.getVolunteers = async (req, res, next) => {
 // ── 3 · Create Help Request (User Side) ───────────────────────────
 exports.createHelpRequest = async (req, res, next) => {
   try {
-    const { requester, latitude, longitude, address, destination, helpDescription } = req.body;
-    if (!requester || !latitude || !longitude || !helpDescription) {
-      return res.status(400).json({ success: false, error: 'Requester, latitude, longitude, and helpDescription are required.' });
+    const { requester, requesterName, requestType, latitude, longitude, address, destination, helpDescription, description } = req.body;
+    const desc = (helpDescription || description || '').trim();
+    
+    if (!latitude || !longitude || !desc) {
+      return res.status(400).json({ success: false, error: 'Latitude, longitude, and helpDescription are required.' });
+    }
+
+    const requesterIdentifier = (req.user && (req.user.username || req.user.name || req.user._id)) || requester;
+    if (!requesterIdentifier) {
+      return res.status(400).json({ success: false, error: 'Requester identifier is required.' });
     }
 
     const newRequest = new HelpRequest({
-      requester,
+      requester: requesterIdentifier,
+      requesterId: req.user ? req.user._id : null,
+      requesterName: (req.user && req.user.name) || requesterName || requesterIdentifier,
+      requestType: requestType || 'general',
       currentLocation: { latitude: Number(latitude), longitude: Number(longitude), address: address || '' },
       destination: destination || '',
-      helpDescription,
-      status: 'searching',
+      helpDescription: desc,
+      description: desc,
+      status: 'PENDING',
     });
 
     await newRequest.save();
 
-    console.log(`[Notification] FCM Mock: Broadcasting new help request to nearby volunteers for request ${newRequest._id}`);
+    console.log('\n--- [Volunteer Request Creation Started] ---');
+    console.log('Request Payload:', {
+      requester: req.body.requester,
+      requesterName: req.body.requesterName,
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
+      address: req.body.address,
+      destination: req.body.destination,
+      helpDescription: desc
+    });
+    console.log('Authenticated user ID:', req.user ? req.user._id : 'N/A');
+    console.log('Authenticated user role:', req.user ? req.user.role : 'N/A');
+    console.log('Generated request ID:', newRequest._id);
+    console.log('Status:', newRequest.status);
+    console.log('Location:', newRequest.currentLocation);
+
     if (req.io) {
       req.io.to('volunteers').emit('new_help_request', newRequest);
+      req.io.emit('new_help_request', newRequest);
     }
 
     res.status(201).json({ success: true, data: newRequest });
@@ -79,23 +107,56 @@ exports.createHelpRequest = async (req, res, next) => {
 // ── 4 · Get Nearby Requests (Volunteer Dashboard) ─────────────────
 exports.getNearbyRequests = async (req, res, next) => {
   try {
-    const { volunteerId } = req.query;
+    console.log('\n--- [Volunteer Dashboard Request Started] ---');
+    console.log('Authenticated user:', req.user ? req.user._id : 'N/A');
+    console.log('Authenticated role:', req.user ? req.user.role : 'N/A');
 
-    const query = {
-      $or: [
-        { status: 'searching' },
-      ]
-    };
+    const volunteerId = req.query.volunteerId || (req.user && req.user._id);
 
-    if (volunteerId) {
-      query.$or.push({ volunteer: volunteerId, status: 'accepted' });
+    // Filter: All pending requests (no volunteer assigned yet)
+    // PLUS any accepted/active requests assigned to the current volunteer
+    const orConditions = [
+      { status: { $in: ['PENDING', 'searching'] } }
+    ];
+
+    if (volunteerId && mongoose.Types.ObjectId.isValid(volunteerId.toString())) {
+      orConditions.push({
+        volunteer: volunteerId,
+        status: { $in: ['ACCEPTED', 'accepted', 'ACTIVE', 'active'] }
+      });
     }
+
+    const query = { $or: orConditions };
+    console.log('MongoDB Query Filter:', JSON.stringify(query));
 
     const requests = await HelpRequest.find(query)
       .populate({ path: 'volunteer', select: '-password' })
+      .populate({ path: 'requesterId', select: '-password' })
       .sort({ createdAt: -1 });
 
-    res.status(200).json({ success: true, data: requests });
+    console.log('Pending requests found:', requests.length);
+
+    res.status(200).json({ success: true, data: requests, requests: requests });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── 4.1 · Diagnostic Endpoint (Debug Mode) ────────────────────────
+exports.getDebugRequests = async (req, res, next) => {
+  try {
+    const allPending = await HelpRequest.find({ status: { $in: ['PENDING', 'searching'] } }).sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      diagnostic: {
+        authenticatedUser: req.user ? req.user._id : null,
+        authenticatedRole: req.user ? req.user.role : null,
+        totalPendingRequests: allPending.length,
+        pendingRequestIds: allPending.map(r => r._id),
+        requesterIds: allPending.map(r => r.requesterId || r.requester),
+        pendingRequests: allPending
+      }
+    });
   } catch (err) {
     next(err);
   }
@@ -105,7 +166,10 @@ exports.getNearbyRequests = async (req, res, next) => {
 exports.getRequestStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const helpRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
+    const helpRequest = await HelpRequest.findById(id)
+      .populate({ path: 'volunteer', select: '-password' })
+      .populate({ path: 'requesterId', select: '-password' });
+
     if (!helpRequest) {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
     }
@@ -120,7 +184,7 @@ exports.getRequestStatus = async (req, res, next) => {
 exports.acceptRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { volunteerId } = req.body;
+    const volunteerId = req.body.volunteerId || (req.user && req.user._id);
 
     if (!volunteerId) {
       return res.status(400).json({ success: false, error: 'Volunteer ID is required.' });
@@ -136,22 +200,25 @@ exports.acceptRequest = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
     }
 
-    if (helpRequest.status !== 'searching') {
+    if (!['PENDING', 'searching'].includes(helpRequest.status)) {
       return res.status(400).json({ success: false, error: `Request has already been ${helpRequest.status}.` });
     }
 
-    helpRequest.status = 'accepted';
+    helpRequest.status = 'ACCEPTED';
     helpRequest.volunteer = volunteer._id;
     await helpRequest.save();
 
     volunteer.availability = false;
     await volunteer.save();
 
-    const updatedRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
+    const updatedRequest = await HelpRequest.findById(id)
+      .populate({ path: 'volunteer', select: '-password' })
+      .populate({ path: 'requesterId', select: '-password' });
 
     if (req.io) {
       req.io.to(id).emit('request_accepted', updatedRequest);
       req.io.to('volunteers').emit('request_updated', updatedRequest);
+      req.io.emit('request_updated', updatedRequest);
     }
 
     res.status(200).json({ success: true, data: updatedRequest });
@@ -169,12 +236,13 @@ exports.rejectRequest = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
     }
 
-    helpRequest.status = 'rejected';
+    helpRequest.status = 'REJECTED';
     await helpRequest.save();
 
     if (req.io) {
       req.io.to(id).emit('request_rejected', helpRequest);
       req.io.to('volunteers').emit('request_updated', helpRequest);
+      req.io.emit('request_updated', helpRequest);
     }
 
     res.status(200).json({ success: true, data: helpRequest });
@@ -192,18 +260,21 @@ exports.completeRequest = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Help request not found.' });
     }
 
-    helpRequest.status = 'completed';
+    helpRequest.status = 'COMPLETED';
     await helpRequest.save();
 
     if (helpRequest.volunteer) {
       await User.findByIdAndUpdate(helpRequest.volunteer, { availability: true });
     }
 
-    const updatedRequest = await HelpRequest.findById(id).populate({ path: 'volunteer', select: '-password' });
+    const updatedRequest = await HelpRequest.findById(id)
+      .populate({ path: 'volunteer', select: '-password' })
+      .populate({ path: 'requesterId', select: '-password' });
 
     if (req.io) {
       req.io.to(id).emit('request_completed', updatedRequest);
       req.io.to('volunteers').emit('request_updated', updatedRequest);
+      req.io.emit('request_updated', updatedRequest);
     }
 
     res.status(200).json({ success: true, data: updatedRequest });

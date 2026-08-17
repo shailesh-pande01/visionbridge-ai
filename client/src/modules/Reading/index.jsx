@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { extractText } from '../../services/readingService';
 import LiveCameraView from '../../components/LiveCameraView';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak, cancelSpeech } from '../../voice/speech';
 import './ReadingAssistant.css';
 
 // ─────────────────────────────────────────────────────────────────
@@ -14,15 +16,6 @@ function formatFileSize(bytes) {
   if (bytes < 1024)         return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
 }
 
 /**
@@ -87,24 +80,15 @@ function ResultResponse({ result, onReset }) {
   const [isSpeaking, setIsSpeaking] = React.useState(false);
 
   const speakText = React.useCallback(() => {
-    if (!('speechSynthesis' in window) || !result.extractedText) return;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(`Analysis complete. Extracted text: ${result.extractedText}`);
-    utterance.rate  = 0.95;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend   = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
+    if (!result.extractedText) return;
+    setIsSpeaking(true);
+    speak(`Analysis complete. Extracted text: ${result.extractedText}`, {
+      onEnd: () => setIsSpeaking(false),
+    });
   }, [result]);
 
   const stopSpeaking = React.useCallback(() => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    cancelSpeech();
     setIsSpeaking(false);
   }, []);
 
@@ -116,9 +100,7 @@ function ResultResponse({ result, onReset }) {
     } else {
       speak('Analysis complete. No readable text found.');
     }
-    return () => {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    };
+    return cancelSpeech;
   }, [speakText, result]);
 
   // No text found
@@ -214,7 +196,11 @@ function ReadingAssistant() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const cameraRef = useRef(null);
   const CONFIDENCE_THRESHOLD = 0.70;
+
+  // Voice handlers are registered further down, once the callbacks exist.
+  const voiceRef = useRef({});
 
   // ── Execute Extraction API Call ────────────────────────────────
   const executeExtraction = async (base64Payload) => {
@@ -229,6 +215,13 @@ function ReadingAssistant() {
         setStatus('low-confidence');
         speak("I'm not confident enough to read this accurately. Would you like to connect with a volunteer?");
         return;
+      }
+
+      // Remember the text so follow-up questions ("what is the price of
+      // paneer butter masala?") are answered without a second photo.
+      // A new capture always replaces the previous one.
+      if (data.extractedText) {
+        voiceRef.current.remember({ extractedText: data.extractedText });
       }
 
       setResult(data);
@@ -269,7 +262,7 @@ function ReadingAssistant() {
 
   // ── Reset back to camera mode ──────────────────────────────────
   const handleReset = () => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setImageUrl(null);
     setResult(null);
     setError(null);
@@ -277,11 +270,33 @@ function ReadingAssistant() {
     speak('Camera ready.');
   };
 
+  // ── Voice: "Vision, capture" / "Vision, cancel" ────────────────
+  const { rememberContext } = useFeatureVoice('reading', {
+    capture: () => {
+      if (status !== 'camera') {
+        handleReset();
+        speak('Camera ready. Say Vision, capture, when the text is in front of you.');
+        return;
+      }
+      if (!cameraRef.current?.capture()) {
+        speak('The camera is not ready yet. Please wait a moment and try again.');
+      }
+    },
+    // "Vision, yes" answers the low-confidence volunteer handoff.
+    submit: () => {
+      if (status === 'low-confidence') {
+        navigate('/volunteer', { state: { source: 'Smart Reading Assistant' } });
+      }
+    },
+    cancel: handleReset,
+  });
+  voiceRef.current.remember = rememberContext;
+
   return (
     <div className="reading-page">
       {/* Back nav */}
       <div className="reading-back container">
-        <Link to="/" className="back-link" aria-label="Back to home">
+        <Link to="/user/home" className="back-link" aria-label="Back to home">
           ← Home
         </Link>
       </div>
@@ -291,7 +306,8 @@ function ReadingAssistant() {
         <span className="reading-header__icon" aria-hidden="true">📖</span>
         <h1 className="reading-header__title">Smart Reading Assistant</h1>
         <p className="reading-header__desc">
-          Point your camera at any text — signs, medicine labels, menus, documents — and tap Capture. I'll extract and read it aloud instantly.
+          Point your camera at any text — signs, medicine labels, menus, documents — and say
+          <strong> “Vision, capture.”</strong> I'll read it aloud, then answer questions about it.
         </p>
       </header>
 
@@ -315,9 +331,10 @@ function ReadingAssistant() {
         {/* STEP 1: LIVE CAMERA VIEW */}
         {status === 'camera' && (
           <LiveCameraView
+            ref={cameraRef}
             onCapture={handleCameraCapture}
             onSelectFile={handleSelectFile}
-            buttonLabel="Tap Capture to Read Text"
+            buttonLabel='Say "Vision, capture" — or tap'
             secondaryLabel="Upload from Device"
           />
         )}
@@ -357,7 +374,7 @@ function ReadingAssistant() {
             <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
             <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
               I'm not confident enough to read this text accurately.<br/><br/>
-              Would you like to connect with a volunteer for human assistance?
+              Would you like to connect with a volunteer for human assistance?<br/><br/><strong>Say “Vision, yes” to connect, or “Vision, no” to try again.</strong>
             </p>
             <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
               <button

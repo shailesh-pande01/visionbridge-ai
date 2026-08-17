@@ -26,6 +26,12 @@ const emergencyEventSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Why the alert did not go out, kept so a failed SOS can be
+  // diagnosed after the fact instead of only in the console.
+  whatsappError: {
+    type: String,
+    default: null,
+  },
   endedAt: {
     type: Date,
     default: null,

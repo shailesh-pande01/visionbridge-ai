@@ -1,20 +1,13 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { analyzeFinder } from '../../services/finderService';
 import LiveCameraView from '../../components/LiveCameraView';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak, cancelSpeech } from '../../voice/speech';
 import './FinderAssistant.css';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE_MB = 10;
-
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
-}
 
 function compressImage(file) {
   return new Promise((resolve, reject) => {
@@ -51,26 +44,6 @@ function compressImage(file) {
   });
 }
 
-function extractObjectName(transcript) {
-  let text = transcript.toLowerCase().trim();
-  text = text.replace(/[.,!?]$/, ''); // strip trailing punctuation
-
-  const prefixes = [
-    'find my', 'find the', 'find',
-    'where is my', 'where are my', 'where is the', 'where are the',
-    'locate my', 'locate the', 'locate'
-  ];
-
-  for (const prefix of prefixes) {
-    if (text.startsWith(prefix)) {
-      return text.slice(prefix.length).trim();
-    }
-  }
-
-  // If no prefix matched, just use the whole text (might be just "wallet")
-  return text;
-}
-
 function LoadingResponse() {
   return (
     <div className="transport-response-loading" role="status" aria-live="polite">
@@ -85,18 +58,13 @@ function ResultResponse({ result, onReset }) {
   const [isSpeaking, setIsSpeaking] = React.useState(false);
 
   const speakText = React.useCallback(() => {
-    if (!('speechSynthesis' in window) || !result.speech) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(result.speech);
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    if (!result.speech) return;
+    setIsSpeaking(true);
+    speak(result.speech, { onEnd: () => setIsSpeaking(false) });
   }, [result]);
 
   const stopSpeaking = React.useCallback(() => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setIsSpeaking(false);
   }, []);
 
@@ -146,84 +114,43 @@ function ResultResponse({ result, onReset }) {
 }
 
 function FinderAssistant() {
-  // 'voice' | 'camera' | 'loading' | 'result' | 'low-confidence'
-  const [status, setStatus] = useState('voice'); 
+  // 'idle' | 'camera' | 'loading' | 'result' | 'low-confidence'
+  const [status, setStatus] = useState('idle');
   const [objectName, setObjectName] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  
+  const [typedObject, setTypedObject] = useState('');
+
   const [imageUrl, setImageUrl] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  
+
   const navigate = useNavigate();
-  const recognitionRef = useRef(null);
+  const routerLocation = useLocation();
+  const cameraRef = useRef(null);
+  const voiceRef = useRef({});
   const CONFIDENCE_THRESHOLD = 0.70;
 
-  // ── Voice Input Logic ──────────────────────────────────────────
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setError('Browser does not support Speech Recognition.');
-      speak('Speech recognition is not supported in your browser.');
+  // ── Set the object to look for ─────────────────────────────────
+  // The global voice controller supplies this — either through the
+  // navigation state ("Vision, find my wallet" from another screen) or
+  // by calling the findObject handler while this screen is open.
+  // There is no separate microphone here: one recognizer, app-wide.
+  const beginSearch = (name) => {
+    const cleaned = String(name || '').trim();
+    if (!cleaned) {
+      speak('What are you looking for? Say Vision, find my wallet, for example.');
       return;
     }
-
+    setObjectName(cleaned);
     setError(null);
-    setIsListening(true);
-    speak('What are you looking for?');
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      const extracted = extractObjectName(transcript);
-      if (extracted) {
-        setObjectName(extracted);
-        speak(`Searching for ${extracted}. Please capture the scene.`);
-        setStatus('camera');
-      } else {
-        setError('Could not understand the object name.');
-        speak('I did not catch that. Please try again.');
-      }
-    };
-
-    recognition.onerror = (event) => {
-      setError(`Voice recognition failed: ${event.error}`);
-      setIsListening(false);
-      speak('Voice recognition failed. Please tap the microphone again.');
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const cancelListening = () => {
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    }
-    setIsListening(false);
+    setResult(null);
+    setImageUrl(null);
+    setStatus('camera');
+    voiceRef.current.remember?.({ objectRequested: cleaned, objectResult: null });
+    speak(`Searching for ${cleaned}. Say Vision, capture, when you are pointing at the area.`);
   };
 
   // ── Cleanup ────────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
-      }
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    };
-  }, []);
+  useEffect(() => cancelSpeech, []);
 
   // ── Camera & API Logic ─────────────────────────────────────────
   const executeAnalysis = async (base64Payload) => {
@@ -239,6 +166,18 @@ function FinderAssistant() {
         speak(`I'm not confident enough to locate your ${objectName}. Would you like volunteer assistance?`);
         return;
       }
+
+      // Remember where it was, so "what is next to it?" needs no rescan.
+      voiceRef.current.remember?.({
+        objectRequested: objectName,
+        objectResult: [
+          data.found ? `The ${objectName} was found.` : `The ${objectName} was not found in view.`,
+          data.direction ? `Direction: ${data.direction}.` : '',
+          data.distance ? `Distance: ${data.distance}.` : '',
+          data.reference ? `Nearby reference: ${data.reference}.` : '',
+          data.speech || '',
+        ].filter(Boolean).join(' '),
+      });
 
       setResult(data);
       setStatus('result');
@@ -284,20 +223,67 @@ function FinderAssistant() {
     setResult(null);
     setError(null);
     setObjectName('');
-    setStatus('voice');
+    setTypedObject('');
+    setStatus('idle');
+  };
+
+  // ── Voice handlers ─────────────────────────────────────────────
+  const { rememberContext } = useFeatureVoice('objectFinder', {
+    findObject: beginSearch,
+    capture: () => {
+      if (!objectName) {
+        speak('Tell me what to look for first. Say Vision, find my wallet, for example.');
+        return;
+      }
+      if (status !== 'camera') {
+        handleResetCamera();
+        speak('Camera ready. Say Vision, capture, when you are pointing at the area.');
+        return;
+      }
+      if (!cameraRef.current?.capture()) {
+        speak('The camera is not ready yet. Please wait a moment and try again.');
+      }
+    },
+    // "Vision, yes" answers the low-confidence volunteer handoff.
+    submit: () => {
+      if (status === 'low-confidence') {
+        navigate('/volunteer', { state: { source: 'Smart Object Finder', object: objectName } });
+      }
+    },
+    cancel: handleResetAll,
+  });
+  voiceRef.current.remember = rememberContext;
+
+  // "Vision, find my wallet" said on another screen arrives here as
+  // navigation state — start that search straight away.
+  const requestKeyRef = useRef(null);
+  useEffect(() => {
+    const requested = routerLocation.state?.objectName;
+    if (!requested || requestKeyRef.current === routerLocation.key) return;
+
+    requestKeyRef.current = routerLocation.key;
+    beginSearch(requested);
+    // Intentionally keyed on the navigation only — the key guard above
+    // is what stops this from re-running.
+  }, [routerLocation.key, routerLocation.state]); // eslint-disable-line
+
+  const handleTypedSubmit = (e) => {
+    e.preventDefault();
+    beginSearch(typedObject);
   };
 
   return (
     <div className="finder-page">
       <div className="finder-back container">
-        <Link to="/" className="back-link">← Home</Link>
+        <Link to="/user/home" className="back-link">← Home</Link>
       </div>
 
       <header className="finder-header">
         <span className="finder-header__icon" aria-hidden="true">🔍</span>
         <h1 className="finder-header__title">Smart Object Finder</h1>
         <p className="finder-header__desc">
-          Tell me what you are looking for, and I will scan the scene to find it.
+          Say <strong>“Vision, find my wallet”</strong> and I will scan the scene for it —
+          then answer questions like “what is next to it?”
         </p>
       </header>
 
@@ -309,27 +295,39 @@ function FinderAssistant() {
           </div>
         )}
 
-        {/* STEP 1: VOICE INPUT */}
-        {status === 'voice' && (
+        {/* STEP 1: WHAT ARE WE LOOKING FOR?
+            Spoken through the global assistant — the typed field is a
+            visual fallback, never required. */}
+        {status === 'idle' && (
           <div className="finder-voice-container">
-            <button
-              className={`finder-voice-btn ${isListening ? 'listening' : ''}`}
-              onClick={isListening ? cancelListening : startListening}
-              aria-label={isListening ? 'Cancel listening' : 'Tap to speak'}
-            >
-              🎙️
-            </button>
-            <h2 className="finder-voice-status">
-              {isListening ? 'Listening...' : 'Tap Mic & Speak'}
-            </h2>
+            <span className="finder-voice-btn" aria-hidden="true">🎙️</span>
+            <h2 className="finder-voice-status">Say “Vision, find my wallet”</h2>
             <p className="finder-voice-hint">
-              Try: "Find my wallet" or "Where is my bottle?"
+              Name anything you are looking for — keys, bottle, phone, remote.
             </p>
+
+            <form onSubmit={handleTypedSubmit} className="finder-typed-form">
+              <label htmlFor="finder-typed-object" className="finder-typed-label">
+                Or type what to look for
+              </label>
+              <input
+                id="finder-typed-object"
+                type="text"
+                className="finder-typed-input"
+                value={typedObject}
+                onChange={(e) => setTypedObject(e.target.value)}
+                placeholder="e.g. wallet"
+                autoComplete="off"
+              />
+              <button type="submit" className="finder-typed-submit">
+                🔍 Start Searching
+              </button>
+            </form>
           </div>
         )}
 
-        {/* Active Object Display (when not in voice mode) */}
-        {status !== 'voice' && objectName && (
+        {/* Active Object Display */}
+        {status !== 'idle' && objectName && (
           <div className="finder-object-display">
             <h3>Searching for:</h3>
             <p>{objectName}</p>
@@ -344,9 +342,10 @@ function FinderAssistant() {
         {/* STEP 2: CAMERA */}
         {status === 'camera' && (
           <LiveCameraView
+            ref={cameraRef}
             onCapture={handleCameraCapture}
             onSelectFile={handleSelectFile}
-            buttonLabel="Tap Capture to Scan"
+            buttonLabel='Say "Vision, capture" — or tap'
             secondaryLabel="Upload Image"
           />
         )}
@@ -379,7 +378,7 @@ function FinderAssistant() {
             <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
             <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
               I couldn't clearly see if your {objectName} is there.<br/><br/>
-              Would you like to connect with a volunteer for human assistance?
+              Would you like to connect with a volunteer for human assistance?<br/><br/><strong>Say “Vision, yes” to connect, or “Vision, no” to try again.</strong>
             </p>
             <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
               <button

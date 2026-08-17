@@ -17,12 +17,13 @@ const finderRoutes    = require('./routes/finderRoutes');
 const emergencyRoutes = require('./routes/emergencyRoutes');
 const authRoutes      = require('./routes/authRoutes');
 const voiceRoutes     = require('./routes/voiceRoutes');
+const assistantRoutes = require('./routes/assistantRoutes'); // Conversational voice assistant
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ── Database Connection ─────────────────────────────────
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/visionbridge', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/visionbridge', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => {
@@ -119,6 +120,7 @@ app.use('/api/transport', transportRoutes);
 app.use('/api/object-finder', finderRoutes);
 app.use('/api/auth',      authRoutes);
 app.use('/api/voice',     voiceRoutes);
+app.use('/api/assistant', assistantRoutes);
 
 // ── 404 Handler ─────────────────────────────────────────
 app.use((req, res) => {

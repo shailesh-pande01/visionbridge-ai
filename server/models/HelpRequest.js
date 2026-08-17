@@ -2,9 +2,18 @@ const mongoose = require('mongoose');
 
 const helpRequestSchema = new mongoose.Schema({
   requester: {
-    // Can store a user ID or socket ID / session ID for guest/low-vision requester
+    // Stores username or identifier
     type: String,
     required: true,
+  },
+  requesterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  requesterName: {
+    type: String,
+    default: '',
   },
   volunteer: {
     type: mongoose.Schema.Types.ObjectId,
@@ -24,10 +33,21 @@ const helpRequestSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  description: {
+    type: String,
+    default: '',
+  },
+  requestType: {
+    type: String,
+    default: 'general',
+  },
   status: {
     type: String,
-    enum: ['searching', 'accepted', 'completed', 'rejected'],
-    default: 'searching',
+    enum: [
+      'PENDING', 'ACCEPTED', 'ACTIVE', 'COMPLETED', 'REJECTED',
+      'searching', 'accepted', 'active', 'completed', 'rejected'
+    ],
+    default: 'PENDING',
   },
 }, { timestamps: true });
 

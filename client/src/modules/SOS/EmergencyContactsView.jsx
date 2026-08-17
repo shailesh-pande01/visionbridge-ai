@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../../contexts/AuthContext';
 import { getContacts, addContact, updateContact, deleteContact } from '../../services/sosService';
 
 function EmergencyContactsView() {
+  const { user } = useContext(AuthContext);
   const [contacts, setContacts] = useState([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -10,14 +12,16 @@ function EmergencyContactsView() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const currentUserId = user ? (user.username || user._id || user.name) : 'default_user';
+
   useEffect(() => {
     fetchContacts();
-  }, []);
+  }, [user]);
 
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      const data = await getContacts();
+      const data = await getContacts(currentUserId);
       setContacts(data);
     } catch (err) {
       setError(err.message);
@@ -39,7 +43,7 @@ function EmergencyContactsView() {
         await updateContact(editingId, name, phone, relationship);
         setEditingId(null);
       } else {
-        await addContact(name, phone, relationship);
+        await addContact(name, phone, relationship, currentUserId);
       }
       setName('');
       setPhone('');

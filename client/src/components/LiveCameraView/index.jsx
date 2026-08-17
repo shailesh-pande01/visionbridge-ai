@@ -1,16 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, {
+  useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle,
+} from 'react';
+import { speak } from '../../voice/speech';
 import './LiveCameraView.css';
 
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
-}
-
-function LiveCameraView({ onCapture, onSelectFile, onContinuousCapture, autoCaptureInterval, buttonLabel = 'Capture', secondaryLabel = 'Upload from Device' }) {
+const LiveCameraView = forwardRef(function LiveCameraView({
+  onCapture, onSelectFile, onContinuousCapture, autoCaptureInterval,
+  buttonLabel = 'Capture', secondaryLabel = 'Upload from Device',
+}, ref) {
   const [facingMode, setFacingMode] = useState('environment');
   // 'initializing' | 'ready' | 'error'
   const [cameraStatus, setCameraStatus] = useState('initializing');
@@ -119,8 +116,10 @@ function LiveCameraView({ onCapture, onSelectFile, onContinuousCapture, autoCapt
   };
 
   // ── Capture Frame to Base64 ────────────────────────────────────
-  const handleCaptureClick = () => {
-    if (!videoRef.current || cameraStatus !== 'ready') return;
+  // Returns false when the camera is not ready, so a voice-triggered
+  // capture can tell the user instead of silently doing nothing.
+  const handleCaptureClick = useCallback(() => {
+    if (!videoRef.current || cameraStatus !== 'ready') return false;
 
     speak('Image captured.');
 
@@ -141,7 +140,15 @@ function LiveCameraView({ onCapture, onSelectFile, onContinuousCapture, autoCapt
     stopStream();
 
     onCapture(base64, sizeKB, dataUrl);
-  };
+    return true;
+  }, [cameraStatus, onCapture, stopStream]);
+
+  // ── Imperative API for the global voice controller ─────────────
+  // "Vision, capture" reaches the same code path as tapping Capture.
+  useImperativeHandle(ref, () => ({
+    capture: handleCaptureClick,
+    isReady: () => cameraStatus === 'ready',
+  }), [handleCaptureClick, cameraStatus]);
 
   // ── Secondary File Upload Handler ──────────────────────────────
   const handleFileChange = (e) => {
@@ -245,6 +252,6 @@ function LiveCameraView({ onCapture, onSelectFile, onContinuousCapture, autoCapt
       </div>
     </div>
   );
-}
+});
 
 export default LiveCameraView;

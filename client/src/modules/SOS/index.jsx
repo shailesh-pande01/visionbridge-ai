@@ -12,7 +12,7 @@ function SOSModule() {
     <div className="sos-page">
       {/* Back nav */}
       <div className="sos-back container">
-        <Link to="/" className="back-link" aria-label="Back to home">
+        <Link to="/user/home" className="back-link" aria-label="Back to home">
           ← Home
         </Link>
       </div>

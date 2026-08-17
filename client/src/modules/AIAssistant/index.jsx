@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { analyzeImage, analyzeHazard } from '../../services/visionService';
 import LiveCameraView from '../../components/LiveCameraView';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak, cancelSpeech } from '../../voice/speech';
 import './AIAssistant.css';
 
 // ─────────────────────────────────────────────────────────────────
@@ -14,15 +16,6 @@ function formatFileSize(bytes) {
   if (bytes < 1024)         return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
 }
 
 function formatTime(seconds) {
@@ -91,9 +84,6 @@ function LoadingResponse() {
 
 function ResultResponse({ result, onReset }) {
   const speakDescription = React.useCallback(() => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-
     let speechText = `Analysis complete. ${result.scene}. `;
     if (result.obstacles && result.obstacles.length > 0) {
       speechText += `Warning, obstacles detected: ${result.obstacles.join('. ')}. `;
@@ -103,16 +93,12 @@ function ResultResponse({ result, onReset }) {
       speechText += `Objects detected include: ${result.objects.join('. ')}. `;
     }
 
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
+    speak(speechText);
   }, [result]);
 
   React.useEffect(() => {
     speakDescription();
-    return () => {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    };
+    return cancelSpeech;
   }, [speakDescription]);
 
   return (
@@ -197,6 +183,9 @@ function AIAssistant() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const routerLocation = useLocation();
+  const cameraRef = useRef(null);
+  const voiceRef = useRef({});
   const CONFIDENCE_THRESHOLD = 0.70;
 
   // Hazard Mode State
@@ -231,6 +220,18 @@ function AIAssistant() {
         speak("I'm not confident enough to answer accurately. Would you like to connect with a volunteer?");
         return;
       }
+
+      // Store the scene so follow-ups ("what is that object?", "is
+      // anything dangerous?") are answered from this same capture.
+      voiceRef.current.remember?.({
+        lastImageAnalysis: [
+          `Scene: ${data.scene}.`,
+          data.description,
+          data.obstacles?.length ? `Obstacles: ${data.obstacles.join('; ')}.` : '',
+          data.objects?.length ? `Objects: ${data.objects.join('; ')}.` : '',
+          data.lighting ? `Lighting: ${data.lighting}.` : '',
+        ].filter(Boolean).join(' '),
+      });
 
       setResult(data);
       setStatus('result');
@@ -274,9 +275,15 @@ function AIAssistant() {
 
     try {
       const data = await analyzeHazard(base64, 'image/jpeg', sceneMemory);
-      
+
       setSceneMemory(data.sceneSummary);
       setLastSpeech(data.speech);
+
+      // Keep the rolling hazard picture available to voice questions
+      // like "which hazard is closest?" or "is the path safe?".
+      voiceRef.current.remember?.({
+        sceneSummary: [data.sceneSummary, data.speech].filter(Boolean).join(' '),
+      });
 
       const speechLower = (data.speech || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
       if (!speechLower.includes('no significant change')) {
@@ -315,7 +322,7 @@ function AIAssistant() {
 
   // ── Reset back to camera mode ──────────────────────────────────
   const handleReset = () => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setImageUrl(null);
     setResult(null);
     setError(null);
@@ -323,11 +330,52 @@ function AIAssistant() {
     speak('Camera ready.');
   };
 
+  // ── Voice: "Vision, capture" / "Vision, cancel" ────────────────
+  const { rememberContext } = useFeatureVoice('surroundings', {
+    capture: () => {
+      if (status !== 'camera') {
+        handleReset();
+        speak('Camera ready. Say Vision, capture, when you are pointing at what you want described.');
+        return;
+      }
+      if (!cameraRef.current?.capture()) {
+        speak('The camera is not ready yet. Please wait a moment and try again.');
+      }
+    },
+    // "Vision, yes" answers the low-confidence volunteer handoff.
+    submit: () => {
+      if (status === 'low-confidence') {
+        navigate('/volunteer', { state: { source: 'AI Camera Assistant' } });
+      }
+    },
+    cancel: () => {
+      if (isHazardMode) {
+        toggleHazardMode();
+        return;
+      }
+      handleReset();
+    },
+  });
+  voiceRef.current.remember = rememberContext;
+
+  // "Vision, is there anything dangerous?" opens this screen with
+  // hazard scanning already requested.
+  const hazardRequestRef = useRef(null);
+  useEffect(() => {
+    const request = routerLocation.state?.hazardMode;
+    if (!request || hazardRequestRef.current === routerLocation.key) return;
+
+    hazardRequestRef.current = routerLocation.key;
+    if (!isHazardMode) toggleHazardMode();
+    // Intentionally keyed on the navigation only: toggleHazardMode is
+    // rebuilt every render, and the key guard above stops repeats.
+  }, [routerLocation.key, routerLocation.state]); // eslint-disable-line
+
   return (
     <div className="camera-page">
       {/* Back nav */}
       <div className="camera-back container">
-        <Link to="/" className="back-link" aria-label="Back to home">
+        <Link to="/user/home" className="back-link" aria-label="Back to home">
           ← Home
         </Link>
       </div>
@@ -337,7 +385,8 @@ function AIAssistant() {
         <span className="camera-header__icon" aria-hidden="true">🎙️</span>
         <h1 className="camera-header__title">AI Camera Assistant</h1>
         <p className="camera-header__desc">
-          Point your camera at your surroundings and tap Capture, or enable Hazard Mode for continuous safety monitoring.
+          Point your camera at your surroundings and say <strong>“Vision, capture.”</strong> Then ask
+          me anything about what I saw, or enable Hazard Mode for continuous safety monitoring.
         </p>
       </header>
 
@@ -401,11 +450,12 @@ function AIAssistant() {
         {/* STEP 1: LIVE CAMERA VIEW */}
         {status === 'camera' && (
           <LiveCameraView
+            ref={cameraRef}
             onCapture={handleCameraCapture}
             onSelectFile={handleSelectFile}
             onContinuousCapture={handleContinuousCapture}
             autoCaptureInterval={isHazardMode && hazardStatus === 'scanning' ? 5000 : null}
-            buttonLabel={isHazardMode ? "Scanning Automatically..." : "Tap Capture to Analyze"}
+            buttonLabel={isHazardMode ? 'Scanning Automatically...' : 'Say "Vision, capture" — or tap'}
             secondaryLabel={isHazardMode ? "Disabled in Hazard Mode" : "Upload from Device"}
           />
         )}
@@ -445,7 +495,7 @@ function AIAssistant() {
             <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
             <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
               I'm not confident enough to answer this accurately.<br/><br/>
-              Would you like to connect with a volunteer for human assistance?
+              Would you like to connect with a volunteer for human assistance?<br/><br/><strong>Say “Vision, yes” to connect, or “Vision, no” to try again.</strong>
             </p>
             <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
               <button

@@ -6,4 +6,7 @@ const sosController = require('../controllers/sosController');
 router.post('/sos', sosController.triggerEmergency);
 router.patch('/sos/:id/end', sosController.endEmergencyRequest);
 
+// Read-only check that the WhatsApp credentials still work. Sends nothing.
+router.get('/whatsapp/status', sosController.whatsappStatus);
+
 module.exports = router;

@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getStoredUser, setStoredUser, clearStoredUser } from '../services/session';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -11,10 +12,11 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is logged in
-    const storedUser = localStorage.getItem('user');
+    // Check if user is logged in. Reads this tab's pinned session so a
+    // login in another tab cannot change who this tab is signed in as.
+    const storedUser = getStoredUser();
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      setUser(storedUser);
     }
     setLoading(false);
   }, []);
@@ -31,7 +33,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       if (data.success) {
         setUser(data.data);
-        localStorage.setItem('user', JSON.stringify(data.data));
+        setStoredUser(data.data);
         return { success: true, role: data.data.role };
       } else {
         return { success: false, error: data.error };
@@ -53,7 +55,7 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
       if (data.success) {
         setUser(data.data);
-        localStorage.setItem('user', JSON.stringify(data.data));
+        setStoredUser(data.data);
         return { success: true, role: data.data.role };
       } else {
         return { success: false, error: data.error };
@@ -65,7 +67,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
+    clearStoredUser();
     navigate('/login');
   };
 

@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getLocationDescription } from '../../services/locationService';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak, cancelSpeech } from '../../voice/speech';
 import './LocationAssistant.css';
 
 // ─────────────────────────────────────────────────────────────────
@@ -45,36 +47,20 @@ function ResultState({ result, onRefresh }) {
   const [isSpeaking, setIsSpeaking] = React.useState(false);
 
   const speakSummary = useCallback(() => {
-    if (!('speechSynthesis' in window) || !result.summary) return;
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(result.summary);
-    utterance.rate  = 0.95;
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend   = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
+    if (!result.summary) return;
+    setIsSpeaking(true);
+    speak(result.summary, { onEnd: () => setIsSpeaking(false) });
   }, [result.summary]);
 
   const stopSpeaking = useCallback(() => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
+    cancelSpeech();
     setIsSpeaking(false);
   }, []);
 
   // Auto-play on result
   useEffect(() => {
     speakSummary();
-    return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
-    };
+    return cancelSpeech;
   }, [speakSummary]);
 
   return (
@@ -168,6 +154,8 @@ function LocationAssistant() {
   const [result, setResult] = useState(null);
   const [error,  setError]  = useState(null);
 
+  const voiceRef = useRef({});
+
   // ── Get user's GPS position ────────────────────────────────────
   const requestLocation = useCallback(() => {
     if (!('geolocation' in navigator)) {
@@ -192,6 +180,17 @@ function LocationAssistant() {
 
         try {
           const data = await getLocationDescription(latitude, longitude);
+
+          // Remember it so "what is nearby?" or "is there a bus stop
+          // near me?" are answered without a second lookup.
+          voiceRef.current.remember?.({
+            locationInfo: [
+              data.summary || '',
+              data.address ? `Address: ${data.address}.` : '',
+              data.landmarks?.length ? `Nearby places: ${data.landmarks.join(', ')}.` : '',
+            ].filter(Boolean).join(' '),
+          });
+
           setResult(data);
           setStatus('result');
         } catch (err) {
@@ -237,6 +236,16 @@ function LocationAssistant() {
     requestLocation();
   }, [requestLocation]);
 
+  // ── Voice: "Vision, capture" here means refresh the fix ────────
+  const { rememberContext } = useFeatureVoice('location', {
+    capture: () => {
+      speak('Updating your location.');
+      requestLocation();
+    },
+    cancel: () => cancelSpeech(),
+  });
+  voiceRef.current.remember = rememberContext;
+
   // ── Derived flags ──────────────────────────────────────────────
   const isLocating = status === 'locating' || status === 'loading';
 
@@ -246,7 +255,7 @@ function LocationAssistant() {
 
       {/* Back nav */}
       <div className="location-back container">
-        <Link to="/" className="back-link" aria-label="Back to home">
+        <Link to="/user/home" className="back-link" aria-label="Back to home">
           ← Home
         </Link>
       </div>

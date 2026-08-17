@@ -15,11 +15,13 @@ exports.addContact = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Name, phone, and relationship are required.' });
     }
 
+    const uId = userId || (req.user && (req.user.username || req.user.id)) || 'default_user';
+
     const contact = new EmergencyContact({
-      userId: userId || 'default_user',
-      name,
-      phone,
-      relationship,
+      userId: uId,
+      name: name.trim(),
+      phone: phone.trim(),
+      relationship: relationship.trim(),
     });
 
     await contact.save();
@@ -69,8 +71,12 @@ exports.deleteContact = async (req, res, next) => {
 // ── 4 · Get All Contacts ──────────────────────────────────────────
 exports.getContacts = async (req, res, next) => {
   try {
-    const { userId } = req.query;
-    const contacts = await EmergencyContact.find({ userId: userId || 'default_user' }).sort({ createdAt: -1 });
+    const targetUserId = req.query.userId || (req.user && (req.user.username || req.user.id)) || 'default_user';
+    const query = targetUserId === 'default_user' 
+      ? { userId: 'default_user' }
+      : { $or: [{ userId: targetUserId }, { userId: 'default_user' }] };
+
+    const contacts = await EmergencyContact.find(query).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: contacts });
   } catch (err) {
     next(err);
@@ -85,7 +91,7 @@ exports.triggerSOS = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Latitude and longitude are required to trigger SOS.' });
     }
 
-    const uId = userId || 'default_user';
+    const uId = userId || (req.user && (req.user.username || req.user.id)) || 'default_user';
     const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 
     // Create and save emergency event
@@ -98,7 +104,7 @@ exports.triggerSOS = async (req, res, next) => {
     await event.save();
 
     // Fetch all trusted emergency contacts
-    const contacts = await EmergencyContact.find({ userId: uId });
+    const contacts = await EmergencyContact.find({ $or: [{ userId: uId }, { userId: 'default_user' }] });
 
     // Mock Firebase Cloud Messaging Notification to every trusted contact
     console.log(`\n🚨 [EMERGENCY SOS TRIGGERED] Event ID: ${event._id}`);
@@ -135,12 +141,12 @@ exports.updateLiveLocation = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Emergency event not found.' });
     }
 
-    if (event.status === 'Ended') {
+    if (event.status === 'Ended' || event.status === 'ENDED') {
       return res.status(400).json({ success: false, error: 'Emergency event has already ended.' });
     }
 
     const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-    event.currentLocation = { latitude: Number(latitude), longitude: Number(longitude), address: address || event.currentLocation.address };
+    event.currentLocation = { latitude: Number(latitude), longitude: Number(longitude), address: address || (event.currentLocation && event.currentLocation.address) || '' };
     event.googleMapsLink = googleMapsLink;
     await event.save();
 
@@ -191,7 +197,7 @@ exports.triggerEmergency = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Valid latitude and longitude are required.' });
     }
 
-    const uId = userId || 'default_user';
+    const uId = userId || (req.user && (req.user.username || req.user.id)) || 'default_user';
     const locationUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
 
     const event = new EmergencyEvent({
@@ -200,6 +206,7 @@ exports.triggerEmergency = async (req, res, next) => {
       longitude: Number(longitude),
       locationUrl,
       status: 'ACTIVE',
+      whatsappSent: false,
     });
     
     await event.save();
@@ -209,7 +216,7 @@ exports.triggerEmergency = async (req, res, next) => {
     console.log(`🔗 Link: ${locationUrl}`);
 
     // Call WhatsApp Service
-    const whatsappSent = await whatsappService.sendEmergencyAlert(
+    const alert = await whatsappService.sendEmergencyAlert(
       uId,
       event.latitude,
       event.longitude,
@@ -217,9 +224,14 @@ exports.triggerEmergency = async (req, res, next) => {
       event.createdAt
     );
 
-    if (whatsappSent) {
-      event.whatsappSent = true;
-      await event.save();
+    // Record the outcome either way — a silent false is what made this
+    // failure impossible to diagnose from the SOS screen.
+    event.whatsappSent = !!alert.sent;
+    event.whatsappError = alert.sent ? null : (alert.reason || 'Unknown WhatsApp failure.');
+    await event.save();
+
+    if (!alert.sent) {
+      console.error(`⚠️ [SOS] Event ${event._id} saved, but the WhatsApp alert failed: ${event.whatsappError}`);
     }
 
     if (req.io) {
@@ -231,11 +243,35 @@ exports.triggerEmergency = async (req, res, next) => {
       data: {
         id: event._id,
         status: event.status,
-        whatsappSent: event.whatsappSent,
+        whatsappSent: !!event.whatsappSent,
+        whatsappError: event.whatsappError,
         coordinates: { latitude: event.latitude, longitude: event.longitude },
         timestamp: event.createdAt,
         locationUrl: event.locationUrl
       }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ── 8.1 · WhatsApp Credential Check (read-only) ────────────────────
+// Confirms the Cloud API accepts the configured credentials without
+// sending a message to anyone, so the alert path can be verified
+// without staging a real emergency. Never returns the token.
+exports.whatsappStatus = async (req, res, next) => {
+  try {
+    const result = await whatsappService.verifyCredentials();
+    res.status(result.ok ? 200 : 503).json({
+      success: result.ok,
+      configured: {
+        accessToken: !!process.env.WHATSAPP_ACCESS_TOKEN,
+        phoneNumberId: !!process.env.WHATSAPP_PHONE_NUMBER_ID,
+        apiVersion: process.env.WHATSAPP_API_VERSION || 'v18.0',
+        template: process.env.WHATSAPP_EMERGENCY_TEMPLATE || null,
+        templateLanguage: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en',
+      },
+      detail: result.detail,
     });
   } catch (err) {
     next(err);

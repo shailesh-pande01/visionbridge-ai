@@ -1,22 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import io from 'socket.io-client';
 import { useLocation } from 'react-router-dom';
+import { AuthContext } from '../../contexts/AuthContext';
 import { createHelpRequest, getMessages, sendMessage, completeRequest } from '../../services/volunteerService';
 import LiveMap from './LiveMap';
 import WebRTCCall from '../../components/WebRTCCall';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak } from '../../voice/speech';
 
 const SOCKET_SERVER = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
-}
-
 function UserView() {
+  const { user } = useContext(AuthContext);
   // 'idle' | 'locating' | 'ready' | 'searching' | 'accepted' | 'completed'
   const [status, setStatus] = useState('locating');
   const [location, setLocation] = useState(null);
@@ -30,7 +25,7 @@ function UserView() {
   const [isCallActive, setIsCallActive] = useState(false);
 
   const locationState = useLocation().state || {};
-  const { source, object } = locationState;
+  const { source, object, voiceMessage } = locationState;
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -66,6 +61,15 @@ function UserView() {
       setHelpDescription(`Please help me find my ${object}.`);
     }
   }, [object]);
+
+  // Prefill from what the user told the assistant — "Vision, tell them
+  // I need help finding the bus stop." The request itself still waits
+  // for a spoken confirmation so a misheard phrase never broadcasts.
+  useEffect(() => {
+    if (!voiceMessage) return;
+    setHelpDescription(voiceMessage);
+    speak(`I have written: ${voiceMessage}. Say Vision, yes, to send this to nearby volunteers.`);
+  }, [voiceMessage]);
 
   // ── Setup Socket.io when Request is Created ────────────────────
   useEffect(() => {
@@ -114,32 +118,66 @@ function UserView() {
   }, [messages]);
 
   // ── Handlers ───────────────────────────────────────────────────
-  const handleRequestSubmit = async (e) => {
-    e.preventDefault();
+  const submitRequest = async () => {
     if (!helpDescription.trim()) {
       setError('Please provide a short description of the help you need.');
+      speak('Tell me what you need help with first.');
+      return;
+    }
+    if (!location) {
+      setError('Still finding your location. Please try again in a moment.');
+      speak('I am still finding your location. Please try again in a moment.');
       return;
     }
 
     setStatus('searching');
     setError(null);
-    speak('Volunteer request sent.');
+    // Only the server can confirm the request was stored and broadcast,
+    // so announce the attempt now and the outcome once it answers —
+    // a rejected request must never sound like a sent one.
+    speak('Sending your request to nearby volunteers.');
 
     try {
+      const requester = (user && (user.username || user.name || user._id)) || 'user_guest';
+      const requesterName = (user && user.name) || (user && user.username) || '';
       const reqData = await createHelpRequest(
-        `user_${Math.random().toString(36).substr(2, 6)}`,
+        requester,
         location.latitude,
         location.longitude,
         address,
         destination,
-        helpDescription
+        helpDescription,
+        requesterName,
+        source || 'general'
       );
       setActiveRequest(reqData);
+      speak('Volunteer request sent. Waiting for a volunteer to accept.');
     } catch (err) {
       setError(err.message);
       setStatus('ready');
+      speak('The request could not be sent. Please try again.');
     }
   };
+
+  const handleRequestSubmit = (e) => {
+    e.preventDefault();
+    submitRequest();
+  };
+
+  // ── Voice: "Vision, yes" sends, "Vision, cancel" clears ────────
+  useFeatureVoice('volunteer', {
+    submit: () => {
+      if (status === 'ready') submitRequest();
+      else if (status === 'accepted') handleCompleteAssistance();
+    },
+    cancel: () => {
+      if (status === 'searching' || status === 'PENDING') {
+        setStatus('ready');
+        setActiveRequest(null);
+        speak('Request cancelled.');
+      }
+    },
+  });
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -174,7 +212,9 @@ function UserView() {
   };
 
   // ───────────────────────────────────────────────────────────────
-  if (status === 'locating') {
+  const normalizedStatus = (status || '').toLowerCase();
+
+  if (normalizedStatus === 'locating') {
     return (
       <div className="volunteer-card" style={{ textAlign: 'center', padding: '4rem 2rem' }}>
         <h2 style={{ fontSize: '1.75rem', fontWeight: 800 }}>📍 Detecting Your Location...</h2>
@@ -183,7 +223,7 @@ function UserView() {
     );
   }
 
-  if (status === 'searching') {
+  if (normalizedStatus === 'searching' || normalizedStatus === 'pending') {
     return (
       <div className="volunteer-status-banner" aria-live="polite">
         <span className="volunteer-status-banner__icon" aria-hidden="true">⏳</span>
@@ -204,7 +244,7 @@ function UserView() {
     );
   }
 
-  if (status === 'accepted') {
+  if (normalizedStatus === 'accepted') {
     const vol = activeRequest?.volunteer || { name: 'Verified Volunteer', phone: '+1234567890' };
     const volunteerLoc = activeRequest?.volunteerLocation || (activeRequest?.volunteer?.location) || { latitude: location.latitude + 0.002, longitude: location.longitude + 0.002 };
 
@@ -252,7 +292,7 @@ function UserView() {
     );
   }
 
-  if (status === 'completed') {
+  if (normalizedStatus === 'completed') {
     return (
       <div className="volunteer-status-banner" style={{ borderColor: 'var(--success)' }}>
         <span className="volunteer-status-banner__icon" aria-hidden="true">🎉</span>

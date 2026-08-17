@@ -1,4 +1,13 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// ─────────────────────────────────────────────────────────────────
+// controllers/voiceController.js
+// Legacy single-shot intent router: POST /api/voice/intent
+//
+// Kept for backwards compatibility — it returns a route directly.
+// New conversational work goes through /api/assistant/command, which
+// returns symbolic actions instead of routes.
+// ─────────────────────────────────────────────────────────────────
+
+const gemini = require('../services/geminiService');
 
 // Maps Gemini intents to existing frontend routes
 const ROUTE_MAP = {
@@ -12,17 +21,6 @@ const ROUTE_MAP = {
   hazard: '/hazard-mode',
   unknown: null,
 };
-
-let _client = null;
-function getClient() {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not set.');
-  }
-  if (!_client) {
-    _client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  }
-  return _client;
-}
 
 const INTENT_PROMPT = `You are the intent router for VisionBridge, an accessibility assistant for low-vision users.
 
@@ -59,44 +57,6 @@ Examples:
 'What is in front of me?' → surroundings
 `;
 
-// Model priority list with fallback support
-const MODEL_CANDIDATES = [
-  process.env.GEMINI_MODEL,
-  'gemini-2.5-flash',
-  'gemini-3.5-flash',
-  'gemini-flash-latest',
-  'gemini-pro-latest',
-  'gemini-2.5-pro',
-  'gemini-2.5-flash-lite',
-  'gemini-3-flash-preview',
-  'gemini-3.1-flash-lite',
-  'gemini-3.1-pro-preview',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
-].filter(Boolean);
-
-async function generateWithFallback(client, promptParts) {
-  let lastError;
-  for (const modelName of MODEL_CANDIDATES) {
-    try {
-      const model = client.getGenerativeModel({
-        model: modelName,
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: "application/json",
-        },
-      });
-      const result = await model.generateContent(promptParts);
-      console.log(`[Voice Intent] Successfully used model: ${modelName}`);
-      return result;
-    } catch (err) {
-      console.warn(`[Voice Intent] Model "${modelName}" failed (${err.message}) - trying next`);
-      lastError = err;
-    }
-  }
-  throw lastError || new Error('No available Gemini model found.');
-}
-
 exports.classifyIntent = async (req, res) => {
   try {
     const { command } = req.body;
@@ -105,39 +65,30 @@ exports.classifyIntent = async (req, res) => {
       return res.status(400).json({ error: 'Command is required' });
     }
 
-    const client = getClient();
-    const result = await generateWithFallback(client, [
-      INTENT_PROMPT,
-      `User command: "${command}"`
-    ]);
+    const data = await gemini.generateJson(
+      [INTENT_PROMPT, `User command: "${command}"`],
+      { temperature: 0.1, maxOutputTokens: 256 }
+    );
 
-    const responseText = result.response.text();
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('[Voice Intent] JSON parse error:', responseText);
-      data = { intent: 'unknown', confidence: 0 };
-    }
+    const intent     = data?.intent || 'unknown';
+    const confidence = data?.confidence || 0;
 
-    const intent = data.intent || 'unknown';
-    const confidence = data.confidence || 0;
-    
-    // Map to the actual frontend route
+    // Map to the actual frontend route — Gemini never supplies a route
     const route = ROUTE_MAP[intent] || null;
 
     res.json({
       intent: route ? intent : 'unknown',
       route,
-      confidence
+      confidence,
     });
   } catch (error) {
-    console.error('[Voice Intent] Error:', error.message);
-    res.status(500).json({
-      error: 'Failed to classify intent: ' + error.message,
+    const { status, message } = gemini.classifyGeminiError(error);
+    console.error('[Voice Intent] Error:', message);
+    res.status(status).json({
+      error: 'Failed to classify intent: ' + message,
       intent: 'unknown',
       route: null,
-      confidence: 0
+      confidence: 0,
     });
   }
 };

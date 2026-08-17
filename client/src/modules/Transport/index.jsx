@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { analyzeTransport } from '../../services/transportService';
 import LiveCameraView from '../../components/LiveCameraView';
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak, cancelSpeech } from '../../voice/speech';
 import './TransportAssistant.css';
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -11,15 +13,6 @@ function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
 }
 
 function compressImage(file) {
@@ -71,19 +64,13 @@ function ResultResponse({ result, onReset }) {
   const [isSpeaking, setIsSpeaking] = React.useState(false);
 
   const speakText = React.useCallback(() => {
-    if (!('speechSynthesis' in window) || !result.speech) return;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(result.speech);
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(utterance);
+    if (!result.speech) return;
+    setIsSpeaking(true);
+    speak(result.speech, { onEnd: () => setIsSpeaking(false) });
   }, [result]);
 
   const stopSpeaking = React.useCallback(() => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setIsSpeaking(false);
   }, []);
 
@@ -93,9 +80,7 @@ function ResultResponse({ result, onReset }) {
     } else {
       speak('Analysis complete. No transport info found.');
     }
-    return () => {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    };
+    return cancelSpeech;
   }, [speakText, result]);
 
   return (
@@ -152,6 +137,8 @@ function TransportAssistant() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const cameraRef = useRef(null);
+  const voiceRef = useRef({});
   const CONFIDENCE_THRESHOLD = 0.70;
 
   const executeAnalysis = async (base64Payload) => {
@@ -167,6 +154,17 @@ function TransportAssistant() {
         speak("I couldn't confidently identify the transport information. Would you like volunteer assistance?");
         return;
       }
+
+      // Keep the sign details for follow-ups: "what is the destination?",
+      // "which platform?", "is this going toward Shivajinagar?"
+      voiceRef.current.remember?.({
+        transportInfo: [
+          data.type ? `Type: ${data.type}.` : '',
+          data.title ? `Identifier: ${data.title}.` : '',
+          data.destination ? `Destination: ${data.destination}.` : '',
+          data.speech || '',
+        ].filter(Boolean).join(' '),
+      });
 
       setResult(data);
       setStatus('result');
@@ -202,7 +200,7 @@ function TransportAssistant() {
   };
 
   const handleReset = () => {
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    cancelSpeech();
     setImageUrl(null);
     setResult(null);
     setError(null);
@@ -210,10 +208,32 @@ function TransportAssistant() {
     speak('Camera ready.');
   };
 
+  // ── Voice: "Vision, capture" / "Vision, cancel" ────────────────
+  const { rememberContext } = useFeatureVoice('transport', {
+    capture: () => {
+      if (status !== 'camera') {
+        handleReset();
+        speak('Camera ready. Say Vision, capture, when the sign is in front of you.');
+        return;
+      }
+      if (!cameraRef.current?.capture()) {
+        speak('The camera is not ready yet. Please wait a moment and try again.');
+      }
+    },
+    // "Vision, yes" answers the low-confidence volunteer handoff.
+    submit: () => {
+      if (status === 'low-confidence') {
+        navigate('/volunteer', { state: { source: 'Public Transport Assistant' } });
+      }
+    },
+    cancel: handleReset,
+  });
+  voiceRef.current.remember = rememberContext;
+
   return (
     <div className="transport-page">
       <div className="transport-back container">
-        <Link to="/" className="back-link">← Home</Link>
+        <Link to="/user/home" className="back-link">← Home</Link>
       </div>
 
       <header className="transport-header">
@@ -234,9 +254,10 @@ function TransportAssistant() {
 
         {status === 'camera' && (
           <LiveCameraView
+            ref={cameraRef}
             onCapture={handleCameraCapture}
             onSelectFile={handleSelectFile}
-            buttonLabel="Tap Capture to Read Sign"
+            buttonLabel='Say "Vision, capture" — or tap'
             secondaryLabel="Upload Image"
           />
         )}
@@ -261,7 +282,7 @@ function TransportAssistant() {
             <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--accent)', marginBottom: '1rem' }}>Low AI Confidence</h2>
             <p style={{ fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '2rem' }}>
               I couldn't confidently identify the transport information.<br/><br/>
-              Would you like to connect with a volunteer for human assistance?
+              Would you like to connect with a volunteer for human assistance?<br/><br/><strong>Say “Vision, yes” to connect, or “Vision, no” to try again.</strong>
             </p>
             <div style={{ display: 'flex', gap: '1.25rem', flexDirection: 'column' }}>
               <button

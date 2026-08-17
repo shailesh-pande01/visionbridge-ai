@@ -19,27 +19,27 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ success: false, error: 'Not authorized, user not found' });
       }
 
-      next();
+      return next();
     } catch (error) {
-      console.error(error);
-      res.status(401).json({ success: false, error: 'Not authorized, token failed' });
+      console.error('[Auth Middleware] Token error:', error.message);
+      return res.status(401).json({ success: false, error: 'Not authorized, token failed' });
     }
   }
 
   if (!token) {
-    res.status(401).json({ success: false, error: 'Not authorized, no token' });
+    return res.status(401).json({ success: false, error: 'Not authorized, no token provided' });
   }
 };
 
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    if (!req.user || !roles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        error: `User role ${req.user.role} is not authorized to access this route`,
+        error: `User role ${req.user ? req.user.role : 'unauthenticated'} is not authorized to access this route`,
       });
     }
-    next();
+    return next();
   };
 };
 

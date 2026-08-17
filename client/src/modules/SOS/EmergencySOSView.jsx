@@ -1,126 +1,31 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
+import { useLocation } from 'react-router-dom';
+import { AuthContext } from '../../contexts/AuthContext';
 import { triggerSOS, updateLiveLocation, endEmergency } from '../../services/sosService';
-
-function speak(text) {
-  if ('speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
-  }
-}
+import { useFeatureVoice } from '../../voice/AssistantContext';
+import { speak } from '../../voice/speech';
 
 function EmergencySOSView() {
+  const { user } = useContext(AuthContext);
   // 'IDLE' | 'COUNTDOWN' | 'GETTING_LOCATION' | 'ACTIVE' | 'ENDED' | 'ERROR'
   const [status, setStatus] = useState('IDLE');
   const [countdown, setCountdown] = useState(5);
   const [activeEvent, setActiveEvent] = useState(null);
   const [error, setError] = useState(null);
-  const [isListening, setIsListening] = useState(false);
-  const [voiceError, setVoiceError] = useState(null);
   const [location, setLocation] = useState(null);
 
   const timerRef = useRef(null);
   const locationIntervalRef = useRef(null);
-  const recognitionRef = useRef(null);
   const isTriggeringRef = useRef(false);
+  const routerLocation = useLocation();
 
-  // ── 1 · Setup Voice Activation (SpeechRecognition) ──────────────
-  const startVoiceRecognition = useCallback(() => {
-    if (isTriggeringRef.current) return;
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setVoiceError('SpeechRecognition API not supported in this browser.');
-      console.warn('SpeechRecognition API not supported in this browser.');
-      return;
-    }
-
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      console.log('[Voice SOS] Microphone active and listening...');
-      setIsListening(true);
-      setVoiceError(null);
-    };
-
-    recognition.onerror = (event) => {
-      console.error('[Voice SOS] Error:', event.error);
-      setIsListening(false);
-      if (event.error === 'not-allowed') {
-        setVoiceError('Microphone permission denied. Please allow mic access in your browser.');
-      } else {
-        setVoiceError(`Mic error: ${event.error}. Tap button below to restart.`);
-      }
-    };
-
-    recognition.onend = () => {
-      console.log('[Voice SOS] Microphone disconnected.');
-      setIsListening(false);
-      if (status === 'IDLE' && !isTriggeringRef.current) {
-        setTimeout(() => {
-          if (recognitionRef.current && status === 'IDLE' && !isTriggeringRef.current) {
-            try { recognitionRef.current.start(); } catch {}
-          }
-        }, 1000);
-      }
-    };
-
-    recognition.onresult = (event) => {
-      if (isTriggeringRef.current) return;
-
-      let fullTranscript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        fullTranscript += event.results[i][0].transcript.toLowerCase() + ' ';
-      }
-      console.log('[Voice SOS] Live Transcript:', fullTranscript);
-
-      if (
-        fullTranscript.includes('emergency') || 
-        fullTranscript.includes('help me') || 
-        fullTranscript.includes('sos') ||
-        fullTranscript.includes('help')
-      ) {
-        console.log('🚨 [Voice SOS] Trigger word matched!');
-        isTriggeringRef.current = true;
-        try { recognition.stop(); } catch {}
-        handleInitiateSOS();
-      }
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch (err) {
-      console.error('[Voice SOS] Start failed:', err);
-    }
-  }, [status]);
-
-  useEffect(() => {
-    if (status === 'IDLE' && !isTriggeringRef.current) {
-      startVoiceRecognition();
-    } else if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    }
-
-    return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
-    };
-  }, [status, startVoiceRecognition]);
+  // Voice activation now comes from the single global controller —
+  // "Vision, emergency" from anywhere in the app lands here with
+  // autoTrigger set. No second recognizer competing for the mic.
 
   // ── 2 · Countdown Timer Management ──────────────────────────────
   const handleInitiateSOS = useCallback(() => {
     isTriggeringRef.current = true;
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    }
     if (timerRef.current) clearInterval(timerRef.current);
 
     setStatus('COUNTDOWN');
@@ -140,16 +45,36 @@ function EmergencySOSView() {
     }, 1000);
   }, []);
 
-  const handleCancelSOS = () => {
+  const handleCancelSOS = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     isTriggeringRef.current = false;
     setStatus('IDLE');
     setCountdown(5);
     speak('Emergency alert cancelled.');
-    setTimeout(() => {
-      startVoiceRecognition();
-    }, 500);
-  };
+  }, []);
+
+  // ── Voice: arrive here already triggered ───────────────────────
+  // "Vision, emergency" must not turn into a conversation — the
+  // countdown starts the moment this screen opens, with the same
+  // 5-second cancel window as the button.
+  const autoTriggerRef = useRef(null);
+  useEffect(() => {
+    if (!routerLocation.state?.autoTrigger) return;
+    if (autoTriggerRef.current === routerLocation.key) return;
+
+    autoTriggerRef.current = routerLocation.key;
+    handleInitiateSOS();
+  }, [routerLocation.key, routerLocation.state, handleInitiateSOS]);
+
+  // "Vision, cancel" stops the countdown; "Vision, yes" starts it.
+  useFeatureVoice('emergency', {
+    submit: () => {
+      if (status === 'IDLE') handleInitiateSOS();
+    },
+    cancel: () => {
+      if (status === 'COUNTDOWN') handleCancelSOS();
+    },
+  });
 
   // ── 3 · Execute SOS Trigger ─────────────────────────────────────
   const executeSOS = () => {
@@ -168,7 +93,8 @@ function EmergencySOSView() {
         setLocation(loc);
 
         try {
-          const event = await triggerSOS(loc.latitude, loc.longitude, loc.address);
+          const userId = user ? (user.username || user._id || user.name) : 'default_user';
+          const event = await triggerSOS(loc.latitude, loc.longitude, loc.address, userId);
           setActiveEvent(event);
           setStatus('ACTIVE');
           
@@ -220,9 +146,6 @@ function EmergencySOSView() {
     setError(null);
     setStatus('IDLE');
     isTriggeringRef.current = false;
-    setTimeout(() => {
-      startVoiceRecognition();
-    }, 500);
   };
 
   // ── 4 · End Emergency ───────────────────────────────────────────
@@ -286,6 +209,11 @@ function EmergencySOSView() {
             ) : (
               <span style={{ color: '#fca5a5' }}>
                 Emergency activated, but WhatsApp alert could not be sent. Please contact your emergency contact manually.
+                {activeEvent?.whatsappError && (
+                  <span style={{ display: 'block', fontSize: '0.95rem', marginTop: '0.5rem', color: '#94a3b8' }}>
+                    Reason: {activeEvent.whatsappError}
+                  </span>
+                )}
               </span>
             )}
           </p>
@@ -336,12 +264,6 @@ function EmergencySOSView() {
   // default: 'IDLE'
   return (
     <div className="sos-card" style={{ padding: '2rem 1.5rem', textAlign: 'center' }}>
-      {voiceError && (
-        <div style={{ padding: '1rem', background: '#301c1c', border: '2px solid #ef4444', borderRadius: '12px', marginBottom: '1.5rem', fontWeight: 700, color: '#fca5a5', fontSize: '1.15rem' }}>
-          🎙️ {voiceError}
-        </div>
-      )}
-
       {/* Giant SOS Button */}
       <div className="sos-giant-button-wrapper" style={{ padding: '1rem 0 2rem' }}>
         <button
@@ -354,28 +276,15 @@ function EmergencySOSView() {
           <span>Tap to Alert</span>
         </button>
 
-        {/* Clickable Voice Command Indicator */}
-        <button
-          type="button"
-          onClick={startVoiceRecognition}
+        <div
           className="sos-voice-indicator"
-          style={{ width: '100%', cursor: 'pointer', marginTop: '2.5rem', background: isListening ? '#162a1c' : '#21262d', borderColor: isListening ? '#22c55e' : '#30363d' }}
-          aria-live="polite"
+          style={{ width: '100%', marginTop: '2.5rem', background: '#162a1c', borderColor: '#22c55e' }}
         >
-          {isListening ? (
-            <>
-              <span className="sos-voice-indicator__dot" style={{ background: '#22c55e' }} />
-              <span style={{ color: '#22c55e' }}>Listening: Say "Emergency", "Help me", "SOS"</span>
-            </>
-          ) : (
-            <>
-              <span className="sos-voice-indicator__dot" style={{ background: '#ef4444', animation: 'none' }} />
-              <span style={{ color: '#fca5a5' }}>🎙️ Mic Stopped (Tap to Start Listening)</span>
-            </>
-          )}
-        </button>
+          <span className="sos-voice-indicator__dot" style={{ background: '#22c55e' }} />
+          <span style={{ color: '#22c55e' }}>Say “Vision, emergency” from anywhere in the app</span>
+        </div>
         <p style={{ fontSize: '1.1rem', color: '#94a3b8', marginTop: '0.75rem' }}>
-          {isListening ? 'Speak aloud now. Trigger words will be detected instantly.' : 'If your browser blocks auto-start, tap the button above to enable the microphone.'}
+          The alert starts a 5 second countdown. Say “Vision, cancel” or tap Cancel to stop it.
         </p>
       </div>
     </div>

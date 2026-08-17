@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import VoiceNavigation from '../components/VoiceNavigation';
+import { useAssistant } from '../voice/AssistantContext';
 import './Home.css';
 
 // Each entry maps a spoken command to a feature route
@@ -63,16 +63,22 @@ const COMMANDS = [
   },
 ];
 
+// Spoken examples — these are natural phrasings, not fixed keywords.
+const VOICE_EXAMPLES = [
+  '“Vision, read this menu.”',
+  '“Vision, what is around me?”',
+  '“Vision, where is this bus going?”',
+  '“Vision, find my wallet.”',
+  '“Vision, where am I?”',
+  '“Vision, I need a volunteer.”',
+];
+
 function Home() {
   const navigate = useNavigate();
+  const { voiceState } = useAssistant();
 
-  // ── Voice button handler ──────────────────────────
-  // TODO (next step): start SpeechRecognition here,
-  //   match transcript to COMMANDS, then call navigate(match.route)
-  const handleVoiceStart = () => {
-    // Placeholder — voice recognition logic added in next step
-    alert('Voice recognition will be wired up in the next step.');
-  };
+  const isListening =
+    voiceState.status === 'LISTENING' || voiceState.status === 'AWAITING_COMMAND';
 
   const handleCommandClick = (route) => {
     navigate(route);
@@ -89,27 +95,37 @@ function Home() {
             Your AI Vision Companion
           </h1>
           <p className="home-header__sub">
-            Tap the button and speak — or choose a feature below.
+            Just say “Vision” and speak — or choose a feature below.
           </p>
         </div>
       </section>
 
-      {/* ── Central Voice Button ──────────────────── */}
-      <section
-        className="voice-section"
-        aria-labelledby="voice-label"
-      >
+      {/* ── Always-listening panel ────────────────────
+           The microphone is handled globally by the voice
+           controller; this panel just tells the user what
+           they can say and whether it is hearing them.     */}
+      <section className="voice-section" aria-labelledby="voice-label">
         <div className="container voice-section__inner">
 
           <p id="voice-label" className="voice-section__label" aria-live="polite">
-            Speak a Command
+            {isListening ? 'Listening — say “Vision”' : 'Voice assistant'}
           </p>
 
-          <VoiceNavigation />
-
-          <p className="voice-examples" aria-hidden="true">
-            Try: <em>"Read text"</em> · <em>"Where am I?"</em> · <em>"Emergency SOS"</em>
-          </p>
+          <div className={`home-voice-card${isListening ? ' home-voice-card--live' : ''}`}>
+            <span className="home-voice-card__icon" aria-hidden="true">🎙️</span>
+            <p className="home-voice-card__title">
+              Say <strong>“Vision”</strong>, then ask for anything
+            </p>
+            <ul className="home-voice-examples" role="list">
+              {VOICE_EXAMPLES.map((example) => (
+                <li key={example} className="home-voice-example">{example}</li>
+              ))}
+            </ul>
+            <p className="home-voice-card__hint">
+              After a feature opens, keep talking — “Vision, capture”, then ask
+              questions about what I saw.
+            </p>
+          </div>
 
         </div>
       </section>
