@@ -31,9 +31,12 @@ const COMMAND_TIMEOUT_MS = 9000;  // wake word with nothing after it
 const RESTART_DELAY_MS = 350;
 const MAX_RESTART_RETRIES = 6;
 
-const SUPPORTED =
-  typeof window !== 'undefined' &&
-  (window.SpeechRecognition || window.webkitSpeechRecognition);
+function isSpeechSupported() {
+  return (
+    typeof window !== 'undefined' &&
+    Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+  );
+}
 
 function normalize(text) {
   return String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -49,13 +52,15 @@ function VoiceController() {
     getHandler, voiceState, setVoiceState,
   } = useAssistant();
 
-  const [supported] = useState(Boolean(SUPPORTED));
+  const [supported] = useState(isSpeechSupported);
 
   // ── Refs: everything the recognition callbacks need to read ─────
   const recognitionRef = useRef(null);
   const mountedRef = useRef(true);
   const phaseRef = useRef('wake');          // 'wake' | 'command'
   const commandRef = useRef('');
+  const currentTranscriptRef = useRef('');
+  const transcriptBaseRef = useRef('');
   const busyRef = useRef(false);            // a command is being executed
   const wantListeningRef = useRef(true);
   const retryRef = useRef(0);
@@ -84,6 +89,9 @@ function VoiceController() {
     if (commandTimeoutRef.current) { clearTimeout(commandTimeoutRef.current); commandTimeoutRef.current = null; }
     if (restartTimerRef.current) { clearTimeout(restartTimerRef.current); restartTimerRef.current = null; }
 
+    currentTranscriptRef.current = '';
+    transcriptBaseRef.current = '';
+
     const recognition = recognitionRef.current;
     if (recognition) {
       recognition.onstart = null;
@@ -98,6 +106,49 @@ function VoiceController() {
   // Forward declarations so the callbacks below can reference each other.
   const startListeningRef = useRef(() => {});
   const dispatchRef = useRef(async () => {});
+
+  // ── Wake-word / manual activation flow ──────────────────────────
+  // Reused whether activated by voice ("Vision") or right-click trigger.
+  const activateWakeWord = useCallback((initialCommand = '') => {
+    if (!mountedRef.current || busyRef.current) return;
+
+    if (speakingRef.current) {
+      cancelSpeech();
+    }
+
+    // If recognition is inactive, start it without creating duplicate instances
+    if (!recognitionRef.current || statusRef.current === 'IDLE' || statusRef.current === 'BLOCKED') {
+      startListeningRef.current();
+    }
+
+    transcriptBaseRef.current = currentTranscriptRef.current;
+    phaseRef.current = 'command';
+    commandRef.current = initialCommand;
+
+    setStatus('AWAITING_COMMAND', { transcript: initialCommand, error: '' });
+
+    // Nothing after "Vision" yet — prompt and wait.
+    if (!initialCommand) {
+      speak('Yes?');
+    }
+
+    if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
+    commandTimeoutRef.current = setTimeout(() => {
+      if (!mountedRef.current || busyRef.current) return;
+      if (phaseRef.current === 'command' && !commandRef.current.trim()) {
+        phaseRef.current = 'wake';
+        startListeningRef.current(); // clear the stale transcript
+      }
+    }, COMMAND_TIMEOUT_MS);
+
+    if (initialCommand) {
+      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = setTimeout(() => {
+        const command = commandRef.current.trim();
+        if (command) dispatchRef.current(command);
+      }, COMMAND_PAUSE_MS);
+    }
+  }, [setStatus]);
 
   // ── Result handling ─────────────────────────────────────────────
   const handleResult = useCallback((event) => {
@@ -128,58 +179,75 @@ function VoiceController() {
     }
     full = normalize(full);
     if (!full) return;
+    currentTranscriptRef.current = full;
 
     const split = splitOnWakeWord(full);
-    if (!split) {
-      // Speech without the wake word — stay listening, ignore it.
-      if (phaseRef.current === 'wake' && statusRef.current !== 'LISTENING') {
-        setStatus('LISTENING', { transcript: '' });
+
+    if (split) {
+      // Wake word heard in speech
+      if (phaseRef.current === 'wake') {
+        activateWakeWord(split.command);
+      } else {
+        commandRef.current = split.command;
+        if (split.command) {
+          setStatus('AWAITING_COMMAND', { transcript: split.command });
+
+          // Process once the user stops speaking.
+          if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+          pauseTimerRef.current = setTimeout(() => {
+            const command = commandRef.current.trim();
+            if (command) dispatchRef.current(command);
+          }, COMMAND_PAUSE_MS);
+        }
       }
       return;
     }
 
-    // Wake word heard.
-    if (phaseRef.current === 'wake') {
-      phaseRef.current = 'command';
-      setStatus('AWAITING_COMMAND', { transcript: '', error: '' });
-
-      // Nothing after "Vision" yet — prompt and wait.
-      if (!split.command) {
-        speak('Yes?');
+    if (phaseRef.current === 'command') {
+      // Command mode active (e.g. via right-click trigger) without saying "Vision"
+      let commandText = '';
+      if (transcriptBaseRef.current && full.startsWith(transcriptBaseRef.current)) {
+        commandText = full.slice(transcriptBaseRef.current.length).trim();
+      } else if (transcriptBaseRef.current) {
+        const baseWords = transcriptBaseRef.current.split(' ').filter(Boolean);
+        const fullWords = full.split(' ').filter(Boolean);
+        if (fullWords.length > baseWords.length) {
+          commandText = fullWords.slice(baseWords.length).join(' ').trim();
+        }
+      } else {
+        commandText = full;
       }
 
-      if (commandTimeoutRef.current) clearTimeout(commandTimeoutRef.current);
-      commandTimeoutRef.current = setTimeout(() => {
-        if (!mountedRef.current || busyRef.current) return;
-        if (phaseRef.current === 'command' && !commandRef.current.trim()) {
-          phaseRef.current = 'wake';
-          startListeningRef.current(); // clear the stale transcript
-        }
-      }, COMMAND_TIMEOUT_MS);
+      if (commandText) {
+        commandRef.current = commandText;
+        setStatus('AWAITING_COMMAND', { transcript: commandText });
+
+        // Process once the user stops speaking.
+        if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = setTimeout(() => {
+          const command = commandRef.current.trim();
+          if (command) dispatchRef.current(command);
+        }, COMMAND_PAUSE_MS);
+      }
+      return;
     }
 
-    commandRef.current = split.command;
-
-    if (split.command) {
-      setStatus('AWAITING_COMMAND', { transcript: split.command });
-
-      // Process once the user stops speaking.
-      if (pauseTimerRef.current) clearTimeout(pauseTimerRef.current);
-      pauseTimerRef.current = setTimeout(() => {
-        const command = commandRef.current.trim();
-        if (command) dispatchRef.current(command);
-      }, COMMAND_PAUSE_MS);
+    // Speech without the wake word — stay listening, ignore it.
+    if (statusRef.current !== 'LISTENING') {
+      setStatus('LISTENING', { transcript: '' });
     }
-  }, [setStatus]);
+  }, [activateWakeWord, setStatus]);
 
   // ── Start / restart ─────────────────────────────────────────────
   const startListening = useCallback(() => {
-    if (!mountedRef.current || !SUPPORTED) return;
+    if (!mountedRef.current || !isSpeechSupported()) return;
 
     stopRecognition();
     wantListeningRef.current = true;
     phaseRef.current = 'wake';
     commandRef.current = '';
+    currentTranscriptRef.current = '';
+    transcriptBaseRef.current = '';
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
@@ -438,7 +506,13 @@ function VoiceController() {
     if (speaking) {
       setStatus('SPEAKING');
     } else if (!busyRef.current && wantListeningRef.current) {
-      setStatus(statusRef.current === 'BLOCKED' ? 'BLOCKED' : 'LISTENING');
+      if (statusRef.current === 'BLOCKED') {
+        setStatus('BLOCKED');
+      } else if (phaseRef.current === 'command') {
+        setStatus('AWAITING_COMMAND', { transcript: commandRef.current });
+      } else {
+        setStatus('LISTENING');
+      }
     }
   }), [setStatus]);
 
@@ -452,7 +526,7 @@ function VoiceController() {
   useEffect(() => {
     mountedRef.current = true;
 
-    if (!SUPPORTED) {
+    if (!isSpeechSupported()) {
       setStatus('UNSUPPORTED', {
         error: 'This browser does not support speech recognition. Use the buttons on screen, or try Chrome.',
       });
@@ -509,6 +583,29 @@ function VoiceController() {
       document.removeEventListener('keydown', retry);
     };
   }, [voiceState.status]);
+
+  // ── Global right-click trigger ──────────────────────────────────
+  // Right-clicking anywhere acts as an alternative manual activation
+  // for the wake-word ("Vision") flow, while suppressing the browser menu.
+  useEffect(() => {
+    const handleContextMenu = (event) => {
+      // 1. Prevent the browser's default context menu from appearing
+      event.preventDefault();
+
+      if (!isSpeechSupported() || !mountedRef.current) return;
+
+      // Avoid interrupting a command that is currently being executed or dispatched
+      if (busyRef.current) return;
+
+      // 2-4. Trigger the existing voice activation flow
+      activateWakeWord();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [activateWakeWord]);
 
   const handleManualStart = useCallback(() => {
     retryRef.current = 0;
